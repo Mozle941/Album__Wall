@@ -276,7 +276,7 @@ git commit -m "refactor: extract renderAll for in-memory use"
 - Create: `src/bundle.ts`
 - Test: `tests/bundle.test.ts`
 
-- [ ] **Step 1: Write the failing test** — `tests/bundle.test.ts`
+- [x] **Step 1: Write the failing test** — `tests/bundle.test.ts`
 
 ```ts
 import sharp from "sharp";
@@ -300,12 +300,12 @@ describe("buildZip", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/bundle.test.ts`
 Expected: FAIL — cannot resolve `../src/bundle`.
 
-- [ ] **Step 3: Implement** — `src/bundle.ts`
+- [x] **Step 3: Implement** — `src/bundle.ts`
 
 ```ts
 import { zipSync } from "fflate";
@@ -327,12 +327,12 @@ export async function buildZip(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/bundle.test.ts`
-Expected: PASS, 1 test.
+Expected: PASS, 1 test. Full suite: 6 files and 21 tests passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bundle.ts tests/bundle.test.ts
