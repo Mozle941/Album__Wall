@@ -347,7 +347,7 @@ git commit -m "feat: add zip bundle builder"
 - Create: `src/web/handlers.ts`
 - Test: `tests/handlers.test.ts`
 
-- [ ] **Step 1: Write the failing test** — `tests/handlers.test.ts`
+- [x] **Step 1: Write the failing test** — `tests/handlers.test.ts`
 
 ```ts
 import sharp from "sharp";
@@ -427,12 +427,12 @@ describe("handleZip", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/handlers.test.ts`
 Expected: FAIL — cannot resolve `../src/web/handlers`.
 
-- [ ] **Step 3: Implement** — `src/web/handlers.ts`
+- [x] **Step 3: Implement** — `src/web/handlers.ts`
 
 ```ts
 import { buildZip } from "../bundle";
@@ -550,12 +550,13 @@ export function handleZip(req: Request, deps: Deps = {}): Promise<Response> {
 }
 ```
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 Run: `npm test`
-Expected: `6 passed` files, `25 passed` tests.
+Expected: `7 passed` files, `28 passed` tests.
+Plan deviation (user-requested): three CLI argument tests in `tests/cli.test.ts` increase the expected total from Plan 2's 25 to 28 tests; with `tests/handlers.test.ts` this is 7 test files (previously 6). Observed: 7 files and 28 tests passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/web tests/handlers.test.ts
