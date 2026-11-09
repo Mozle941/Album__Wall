@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "build": "tsc --noEmit",
-    "cli": "tsx src/cli.ts"
+    "build": "next build",
+    "cli": "tsx src/cli.ts",
+    "dev": "next dev",
+    "start": "next start",
+    "icons": "tsx scripts/make-icons.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "fflate": "^0.8.3",

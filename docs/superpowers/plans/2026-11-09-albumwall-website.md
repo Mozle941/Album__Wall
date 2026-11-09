@@ -571,7 +571,7 @@ No unit tests; verified by production build and Task 7.
 - Create: `next.config.ts`, `app/api/info/route.ts`, `app/api/wallpaper/route.ts`, `app/api/zip/route.ts`, `app/layout.tsx`, `app/manifest.ts`, `app/page.tsx`, `scripts/make-icons.ts`
 - Modify: `package.json` (scripts), `.gitignore`
 
-- [ ] **Step 1: `next.config.ts`**
+- [x] **Step 1: `next.config.ts`**
 
 ```ts
 import type { NextConfig } from "next";
@@ -584,7 +584,7 @@ const config: NextConfig = {
 export default config;
 ```
 
-- [ ] **Step 2: Route adapters**
+- [x] **Step 2: Route adapters**
 
 `app/api/info/route.ts`:
 
@@ -619,7 +619,7 @@ export const maxDuration = 60;
 export const GET = (req: Request) => handleZip(req);
 ```
 
-- [ ] **Step 3: Layout and manifest**
+- [x] **Step 3: Layout and manifest**
 
 `app/layout.tsx`:
 
@@ -666,7 +666,7 @@ export default function manifest(): MetadataRoute.Manifest {
 }
 ```
 
-- [ ] **Step 4: Page** — `app/page.tsx`
+- [x] **Step 4: Page** — `app/page.tsx`
 
 ```tsx
 "use client";
@@ -757,7 +757,7 @@ export default function Home() {
 }
 ```
 
-- [ ] **Step 5: Icons** — `scripts/make-icons.ts`
+- [x] **Step 5: Icons** — `scripts/make-icons.ts`
 
 ```ts
 import sharp from "sharp";
@@ -780,7 +780,7 @@ console.log("icons written");
 Run: `npx tsx scripts/make-icons.ts`
 Expected: `icons written`; `public/icon-192.png` and `public/icon-512.png` exist. Placeholder art (green square on dark); replace with real artwork later.
 
-- [ ] **Step 6: Scripts and ignores**
+- [x] **Step 6: Scripts and ignores**
 
 Add to `package.json` `scripts`:
 
@@ -802,12 +802,12 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 ```
 
-- [ ] **Step 7: Build**
+- [x] **Step 7: Build**
 
 Run: `npm run typecheck && npm run build`
 Expected: no type errors; route table lists `/`, `/api/info`, `/api/wallpaper`, `/api/zip`, `/manifest.webmanifest`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
