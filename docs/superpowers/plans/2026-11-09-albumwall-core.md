@@ -216,7 +216,7 @@ git commit -m "feat: add device presets"
 - Create: `src/spotify.ts`
 - Test: `tests/spotify.test.ts`
 
-- [ ] **Step 1: Write the failing test** — `tests/spotify.test.ts`
+- [x] **Step 1: Write the failing test** — `tests/spotify.test.ts`
 
 ```ts
 import sharp from "sharp";
@@ -301,12 +301,12 @@ describe("fetchArtwork", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/spotify.test.ts`
 Expected: FAIL — cannot resolve `../src/spotify.js`.
 
-- [ ] **Step 3: Write minimal implementation** — `src/spotify.ts`
+- [x] **Step 3: Write minimal implementation** — `src/spotify.ts`
 
 ```ts
 import sharp from "sharp";
@@ -378,12 +378,12 @@ export async function fetchArtwork(input: string, fetchFn: FetchFn = fetch): Pro
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/spotify.test.ts`
 Expected: PASS, 7 tests. Tests use an injected fake `fetch`; no network needed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/spotify.ts tests/spotify.test.ts
