@@ -539,7 +539,7 @@ git commit -m "feat: render wallpapers with blur and solid layouts"
 - Create: `src/generate.ts`
 - Test: `tests/generate.test.ts`
 
-- [ ] **Step 1: Write the failing test** — `tests/generate.test.ts`
+- [x] **Step 1: Write the failing test** — `tests/generate.test.ts`
 
 ```ts
 import { mkdtemp, readdir } from "node:fs/promises";
@@ -569,12 +569,12 @@ describe("generateAll", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/generate.test.ts`
 Expected: FAIL — cannot resolve `../src/generate.js`.
 
-- [ ] **Step 3: Write minimal implementation** — `src/generate.ts`
+- [x] **Step 3: Write minimal implementation** — `src/generate.ts`
 
 ```ts
 import { mkdir, writeFile } from "node:fs/promises";
@@ -600,12 +600,12 @@ export async function generateAll(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/generate.test.ts`
 Expected: PASS, 1 test.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/generate.ts tests/generate.test.ts
