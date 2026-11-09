@@ -213,7 +213,7 @@ git commit -m "feat: restrict artwork downloads to spotify cdn hosts"
 
 Existing `tests/generate.test.ts` covers `generateAll`; it must still pass.
 
-- [ ] **Step 1: Replace `src/generate.ts`**
+- [x] **Step 1: Replace `src/generate.ts`**
 
 ```ts
 import { mkdir, writeFile } from "node:fs/promises";
@@ -258,12 +258,12 @@ export async function generateAll(
 }
 ```
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `npm test`
 Expected: all pass (`generateAll` behaviour unchanged).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/generate.ts
