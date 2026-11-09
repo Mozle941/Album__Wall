@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { generateAll } from "../src/generate.js";
-import { presetsFor } from "../src/presets.js";
+import { generateAll } from "../src/generate";
+import { presetsFor } from "../src/presets";
 
 describe("generateAll", () => {
   it("writes one png per preset under <out>/<platform>/<id>.png", async () => {

@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { foregroundSide, renderWallpaper } from "../src/render.js";
+import { foregroundSide, renderWallpaper } from "../src/render";
 
 async function redArt(size = 640) {
   return sharp({ create: { width: size, height: size, channels: 3, background: "#ff0000" } })

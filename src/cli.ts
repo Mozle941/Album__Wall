@@ -1,14 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { generateAll } from "./generate.js";
-import { presetsFor, type Platform } from "./presets.js";
-import { foregroundSide, type Layout } from "./render.js";
-import { fetchArtwork } from "./spotify.js";
+import { generateAll } from "./generate";
+import { PLATFORMS, presetsFor, type Platform } from "./presets";
+import { foregroundSide, LAYOUTS, type Layout } from "./render";
+import { fetchArtwork } from "./spotify";
 import sharp from "sharp";
-
-const PLATFORMS: Platform[] = ["android", "ios", "mac", "windows", "linux"];
-const LAYOUTS: Layout[] = ["blur", "solid"];
-
 const USAGE = `Usage: npm run cli -- <spotify-album-or-track-url> [options]
        npm run cli -- --image ./cover.jpg [options]
 

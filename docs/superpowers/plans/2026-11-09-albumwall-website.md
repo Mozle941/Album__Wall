@@ -42,20 +42,20 @@ Next's bundler cannot resolve `.js` suffixes on `.ts` imports, so the core switc
 **Files:**
 - Modify: `tsconfig.json`, `src/*.ts`, `tests/*.ts`, `src/presets.ts`, `src/render.ts`, `src/cli.ts`, `package.json`
 
-- [ ] **Step 1: Install**
+- [x] **Step 1: Install**
 
 ```bash
 npm install fflate next react react-dom
 npm install -D @types/react @types/react-dom
 ```
 
-- [ ] **Step 2: Strip `.js` suffixes from relative imports**
+- [x] **Step 2: Strip `.js` suffixes from relative imports**
 
 ```bash
 sed -i -E 's#(from "\.[^"]*)\.js"#\1"#' src/*.ts tests/*.ts
 ```
 
-- [ ] **Step 3: Replace `tsconfig.json`**
+- [x] **Step 3: Replace `tsconfig.json`**
 
 (`next build` will add the `.next/dev/types` include and set `jsx` to `react-jsx`; that is expected.)
 
@@ -99,7 +99,7 @@ sed -i -E 's#(from "\.[^"]*)\.js"#\1"#' src/*.ts tests/*.ts
 }
 ```
 
-- [ ] **Step 4: Export the constants**
+- [x] **Step 4: Export the constants**
 
 In `src/presets.ts`, replace the `Platform` type line with:
 
@@ -122,12 +122,13 @@ import { PLATFORMS, presetsFor, type Platform } from "./presets";
 import { foregroundSide, LAYOUTS, type Layout } from "./render";
 ```
 
-- [ ] **Step 5: Verify nothing broke**
+- [x] **Step 5: Verify nothing broke**
 
 Run: `npx tsc --noEmit && npm test`
-Expected: no type errors; `16 passed`.
+Expected: no type errors; `19 passed`.
+Plan deviation (user-requested): the expected count is 19 rather than 16 because the user added three subprocess CLI argument tests in `tests/cli.test.ts`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A

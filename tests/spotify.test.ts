@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { fetchArtwork, parseSpotifyUrl, upgradeImageUrl } from "../src/spotify.js";
+import { fetchArtwork, parseSpotifyUrl, upgradeImageUrl } from "../src/spotify";
 
 describe("parseSpotifyUrl", () => {
   it("parses album and track urls, ignoring query and intl prefix", () => {

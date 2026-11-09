@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Preset } from "./presets.js";
-import { renderWallpaper, type RenderOptions } from "./render.js";
+import type { Preset } from "./presets";
+import { renderWallpaper, type RenderOptions } from "./render";
 
 export async function generateAll(
   art: Buffer,

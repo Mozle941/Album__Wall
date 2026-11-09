@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS, getPreset, presetsFor } from "../src/presets.js";
+import { PRESETS, getPreset, presetsFor } from "../src/presets";
 
 describe("presets", () => {
   it("has unique ids and positive integer sizes", () => {

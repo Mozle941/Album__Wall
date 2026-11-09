@@ -1,4 +1,5 @@
-export type Platform = "android" | "ios" | "mac" | "windows" | "linux";
+export const PLATFORMS = ["android", "ios", "mac", "windows", "linux"] as const;
+export type Platform = (typeof PLATFORMS)[number];
 
 export interface Preset {
   id: string;

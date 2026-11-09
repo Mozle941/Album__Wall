@@ -1,6 +1,7 @@
 import sharp from "sharp";
 
-export type Layout = "blur" | "solid";
+export const LAYOUTS = ["blur", "solid"] as const;
+export type Layout = (typeof LAYOUTS)[number];
 
 export interface RenderOptions {
   layout?: Layout;
