@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { fetchArtwork, parseSpotifyUrl, upgradeImageUrl } from "../src/spotify";
+import { assertSpotifyCdn, fetchArtwork, parseSpotifyUrl, upgradeImageUrl } from "../src/spotify";
 
 describe("parseSpotifyUrl", () => {
   it("parses album and track urls, ignoring query and intl prefix", () => {
@@ -76,5 +76,15 @@ describe("fetchArtwork", () => {
     await expect(fetchArtwork("https://open.spotify.com/album/abc", failing)).rejects.toThrow(
       "oEmbed failed: HTTP 404",
     );
+  });
+});
+
+describe("assertSpotifyCdn", () => {
+  it("accepts spotify cdn hosts and rejects others", () => {
+    expect(() => assertSpotifyCdn("https://i.scdn.co/image/abc")).not.toThrow();
+    expect(() => assertSpotifyCdn("https://image-cdn-ak.spotifycdn.com/image/abc")).not.toThrow();
+    expect(() => assertSpotifyCdn("http://169.254.169.254/latest")).toThrow("non-Spotify");
+    expect(() => assertSpotifyCdn("https://evilscdn.co/x")).toThrow("non-Spotify");
+    expect(() => assertSpotifyCdn("nonsense")).toThrow("Invalid image URL");
   });
 });

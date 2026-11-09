@@ -38,6 +38,19 @@ export function upgradeImageUrl(url: string): string {
 
 type FetchFn = typeof fetch;
 
+const CDN_SUFFIXES = ["scdn.co", "spotifycdn.com"];
+
+export function assertSpotifyCdn(url: string): void {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    throw new Error(`Invalid image URL: ${url}`);
+  }
+  const ok = CDN_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`));
+  if (!ok) throw new Error(`Refusing non-Spotify image host: ${host}`);
+}
+
 async function download(url: string, fetchFn: FetchFn): Promise<Buffer | null> {
   const res = await fetchFn(url);
   if (!res.ok) return null;
@@ -53,6 +66,7 @@ export async function fetchArtwork(input: string, fetchFn: FetchFn = fetch): Pro
   const { thumbnail_url: thumbnail } = (await oembedRes.json()) as { thumbnail_url?: string };
   if (!thumbnail) throw new Error("Spotify oEmbed returned no thumbnail_url");
 
+  assertSpotifyCdn(thumbnail);
   const upgraded = upgradeImageUrl(thumbnail);
   let sourceUrl = upgraded;
   let buffer = await download(upgraded, fetchFn);

@@ -142,7 +142,7 @@ The server fetches a URL that came from a remote JSON response. Only allow Spoti
 **Files:**
 - Modify: `src/spotify.ts`, `tests/spotify.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `tests/spotify.test.ts`, change the import line to:
 
@@ -164,12 +164,12 @@ describe("assertSpotifyCdn", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/spotify.test.ts`
 Expected: FAIL — `assertSpotifyCdn` is not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/spotify.ts`, directly after `type FetchFn = typeof fetch;` add:
 
@@ -194,12 +194,12 @@ and in `fetchArtwork`, add the first line below directly above `const upgraded =
   assertSpotifyCdn(thumbnail);
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/spotify.test.ts`
 Expected: PASS, 8 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/spotify.ts tests/spotify.test.ts
