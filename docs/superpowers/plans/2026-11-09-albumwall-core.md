@@ -396,7 +396,7 @@ git commit -m "feat: fetch spotify artwork via oEmbed"
 - Create: `src/render.ts`
 - Test: `tests/render.test.ts`
 
-- [ ] **Step 1: Write the failing test** — `tests/render.test.ts`
+- [x] **Step 1: Write the failing test** — `tests/render.test.ts`
 
 ```ts
 import sharp from "sharp";
@@ -452,12 +452,12 @@ describe("renderWallpaper", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/render.test.ts`
 Expected: FAIL — cannot resolve `../src/render.js`.
 
-- [ ] **Step 3: Write minimal implementation** — `src/render.ts`
+- [x] **Step 3: Write minimal implementation** — `src/render.ts`
 
 ```ts
 import sharp from "sharp";
@@ -521,12 +521,12 @@ async function solidBackground(art: Buffer, target: Size): Promise<Buffer> {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/render.test.ts`
 Expected: PASS, 4 tests (about 1 s).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/render.ts tests/render.test.ts
