@@ -117,7 +117,7 @@ git commit -m "chore: scaffold project"
 - Create: `src/presets.ts`
 - Test: `tests/presets.test.ts`
 
-- [ ] **Step 1: Write the failing test** — `tests/presets.test.ts`
+- [x] **Step 1: Write the failing test** — `tests/presets.test.ts`
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -152,12 +152,12 @@ describe("presets", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/presets.test.ts`
 Expected: FAIL — cannot resolve `../src/presets.js`.
 
-- [ ] **Step 3: Write minimal implementation** — `src/presets.ts`
+- [x] **Step 3: Write minimal implementation** — `src/presets.ts`
 
 ```ts
 export type Platform = "android" | "ios" | "mac" | "windows" | "linux";
@@ -198,12 +198,12 @@ export function getPreset(id: string): Preset {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/presets.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/presets.ts tests/presets.test.ts
