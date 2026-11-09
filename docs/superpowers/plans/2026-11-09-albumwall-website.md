@@ -816,7 +816,7 @@ git commit -m "feat: add Next.js site and PWA manifest"
 
 ### Task 7: Smoke test
 
-- [ ] **Step 1: Offline checks**
+- [x] **Step 1: Offline checks**
 
 ```bash
 npm run build && npx next start -p 3111 &
@@ -826,14 +826,16 @@ for u in "/" "/manifest.webmanifest" "/icon-192.png" "/api/info" "/api/info?url=
 done
 ```
 
-Expected: `/` 200 `text/html`; manifest 200 `application/manifest+json`; icon 200 `image/png`; both `/api/info` calls 400 `application/json`.
+Expected: `/` 200 `text/html`; manifest 200 `application/manifest+json`; icon 200 `image/png`; both `/api/info` calls 400 `application/json`. Observed: all expected routes and statuses passed; `next start` emitted its standalone-mode warning.
 
-- [ ] **Step 2: Live checks (needs internet; I could not run these in the build sandbox)**
+- [x] **Step 2: Live checks**
+
+Observed: live Spotify check verified; the app loaded and preview/zip flow worked.
 
 Open `http://localhost:3111`, paste a real album link, click Load.
 Expected: previews appear; zip downloads and unzips to `<platform>/<id>.png`. If previews are 300px-sourced, the "softer" notice shows (the unofficial 640px swap failed).
 
-- [ ] **Step 3: Stop the server**
+- [x] **Step 3: Stop the server**
 
 ```bash
 kill %1
@@ -841,22 +843,24 @@ kill %1
 
 - [ ] **Step 4: Check on a phone**
 
+NOT RUN: requires a phone and a deployed or tunneled site; deployment is prohibited for this workflow.
+
 Deploy or tunnel the site, open it in Chrome (Android) or Safari (iOS), install to home screen.
 Expected: launches standalone with the icon. Not verified here; iOS install behaviour varies.
 
 ### Task 8: Open-source packaging
 
-Not run in the build sandbox (no Docker, no GitHub). Review before relying on them.
+Docker CLI is not installed and GitHub Actions cannot be run in this sandbox. Packaging files were reviewed; Docker build and GitHub Actions execution were not run.
 
 **Files:**
 - Create: `LICENSE`, `README.md`, `Dockerfile`, `.dockerignore`, `.github/workflows/ci.yml`
 
-- [ ] **Step 1: `LICENSE`** — MIT (swap for AGPL-3.0 if you want hosted forks to share changes)
+- [x] **Step 1: `LICENSE`** — MIT (swap for AGPL-3.0 if you want hosted forks to share changes)
 
 ```
 MIT License
 
-Copyright (c) 2026 <your name>
+Copyright (c) 2026 Moses
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -877,9 +881,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Replace `<your name>` with your name.
+Copyright holder confirmed by the user: Moses.
 
-- [ ] **Step 2: `README.md`**
+- [x] **Step 2: `README.md`**
 
 ```markdown
 # Albumwall
@@ -943,10 +947,14 @@ out
 .git
 ```
 
+NOT RUN: Docker CLI is not installed.
+
 Run: `docker build -t albumwall . && docker run -p 3000:3000 albumwall`
 Expected: site on `http://localhost:3000`, and a wallpaper preview renders (confirms `sharp` is in the image).
 
-- [ ] **Step 4: `.github/workflows/ci.yml`**
+- [x] **Step 4: `.github/workflows/ci.yml`**
+
+Workflow file created and reviewed. GitHub Actions execution NOT RUN; no GitHub integration enabled and no push/deploy authorized.
 
 ```yaml
 name: ci
@@ -966,7 +974,7 @@ jobs:
       - run: npm run build
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -988,12 +996,14 @@ Do before making the repo or site public.
 
 ## Self-review
 
+Plan deviation (user-requested CLI tests): totals are 28 tests across 7 files, rather than the original 25/6. Additional Task 8 local-equivalent checks (`npm ci`, `npm run typecheck`, `npm test`, `npm run build`) passed; Docker and GitHub execution were not verified.
+
 | Check | Result |
 |---|---|
 | Paste link, preview, download zip | Tasks 5–6 |
-| PWA on phone | Manifest and icons (Task 6), install check (Task 7 Step 4). No service worker or offline mode: the app needs the server, so offline adds nothing |
+| PWA on phone | Manifest and icons (Task 6); phone install not verified (Task 7 Step 4 NOT RUN). No service worker or offline mode: the app needs the server, so offline adds nothing |
 | Open-source ready | Task 8 |
-| Placeholders | None, except `<your name>` in LICENSE, which you fill in |
-| Verified here | Tasks 1–6: 25 tests pass, typecheck clean, `next build` succeeds, server answers `/`, manifest, icon and API error paths. |
-| Not verified here | Live Spotify fetch, phone install, Docker, GitHub Actions, rate limiting |
+| Placeholders | None |
+| Verified here | Tasks 1–8 files: 28 tests pass across 7 files; `npm ci`, typecheck and `next build` pass; build emits `/`, `/api/info`, `/api/wallpaper`, `/api/zip`, `/manifest.webmanifest`. Live Spotify check verified; Task 7 offline routes/statuses passed (with standalone-mode warning). |
+| Not verified here | Phone install (Task 7 Step 4 NOT RUN: deployment/tunneling prohibited and no phone available), Docker build (NOT RUN: Docker CLI is not installed), GitHub Actions execution (not run; no push/deploy), rate limiting |
 | Type consistency | Names match across tasks; code was compiled |
