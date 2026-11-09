@@ -616,10 +616,11 @@ git commit -m "feat: generate wallpapers for all presets"
 
 **Files:**
 - Create: `src/cli.ts`
+- Create: `tests/cli.test.ts` (user-directed subprocess integration tests for CLI arguments)
 
-No unit test: it is argument wiring over tested units. Verified by typecheck plus an offline smoke run.
+Plan deviation (user-directed): although this plan specified no unit test, add subprocess integration tests for no-input usage/error, unknown platform, and unknown layout. These are CLI argument tests, not unit tests of the core functions.
 
-- [ ] **Step 1: Write `src/cli.ts`**
+- [x] **Step 1: Write `src/cli.ts`**
 
 ```ts
 import { readFile } from "node:fs/promises";
@@ -696,12 +697,12 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 2: Typecheck and run all tests**
+- [x] **Step 2: Typecheck and run all tests**
 
 Run: `npx tsc --noEmit && npm test`
-Expected: no type errors; `4 passed (4)` files, `16 passed (16)` tests.
+Expected (updated for user-directed test addition): no type errors; `5 passed (5)` files, `19 passed (19)` tests. Observed: no type errors; 5 files and 19 tests passed.
 
-- [ ] **Step 3: Offline smoke test (local image)**
+- [x] **Step 3: Offline smoke test (local image)**
 
 ```bash
 node -e "require('sharp')({create:{width:640,height:640,channels:3,background:'#8844aa'}}).png().toFile('/tmp/cover.png')"
@@ -709,17 +710,17 @@ npm run cli -- --image /tmp/cover.png --platform android,ios --out /tmp/wp
 find /tmp/wp -type f | sort
 ```
 
-Expected: five `note: ... upscales art 640px -> ...` lines, `Wrote 5 wallpapers to /tmp/wp/`, and files `android/android-fhd.png`, `android/android-qhd.png`, `ios/ios-iphone-13.png`, `ios/ios-iphone-15-pro.png`, `ios/ios-iphone-pro-max.png`.
+Expected: five `note: ... upscales art 640px -> ...` lines, `Wrote 5 wallpapers to /tmp/wp/`, and files `android/android-fhd.png`, `android/android-qhd.png`, `ios/ios-iphone-13.png`, `ios/ios-iphone-15-pro.png`, `ios/ios-iphone-pro-max.png`. Observed: all five warnings, summary, and expected files exactly.
 
-- [ ] **Step 4: Live smoke test (needs internet)**
+- [x] **Step 4: Live smoke test (needs internet)**
 
 ```bash
 npm run cli -- "https://open.spotify.com/album/<any-album-id>" --platform windows --out ./out
 ```
 
-Expected: `Artwork: 640x640 from https://i.scdn.co/...`. If it prints `300x300`, the unofficial 640px swap no longer works and fallback is active: record this, it affects output quality.
+Expected: `Artwork: 640x640 from https://i.scdn.co/...`. Observed with Task 3 sample album `4aawyAB9vmqN3uQ7FjRGTy`: `Artwork: 640x640 from https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2732c5b24ecfa39523a75c993c4`; 3 Windows wallpapers were written. The 640px upgrade worked; Spotify served the source from `image-cdn-ak.spotifycdn.com` rather than `i.scdn.co`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/cli.ts
