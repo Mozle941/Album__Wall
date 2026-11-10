@@ -127,13 +127,25 @@ button {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(22vw, 11rem), 1fr));
   gap: 0.6rem;
-  transform: rotate(-1deg) scale(1.02);
+  transform: translate3d(var(--wall-shift-x, 0px), var(--wall-shift-y, 0px), 0) rotate(-1deg) scale(1.02);
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
 }
 
 .hero-tile {
   aspect-ratio: 1;
   border-radius: 0.4rem;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+.hero-tile:nth-child(9n + 2),
+.hero-tile:nth-child(13n + 5) {
+  animation: wall-breathe 11s ease-in-out infinite;
+}
+
+@keyframes wall-breathe {
+  0%, 100% { filter: saturate(0.88); opacity: 0.88; transform: scale(0.99); }
+  50% { filter: saturate(1.16); opacity: 1; transform: scale(1.012); }
 }
 
 .hero-scrim {
@@ -476,29 +488,60 @@ button {
 
 .platform-card {
   position: relative;
+  isolation: isolate;
   display: grid;
   min-height: 7.3rem;
   justify-items: start;
   align-content: center;
   gap: 0.15rem;
   padding: 0.9rem 1rem;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: var(--surface);
   cursor: pointer;
-  transition: transform 120ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  --platform-accent: var(--accent);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 150ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.platform-card::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--platform-accent) 20%, transparent), transparent 60%);
+  content: "";
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+
+.platform-card--android { --platform-accent: #27a96b; }
+.platform-card--ios { --platform-accent: #4386ed; }
+.platform-card--mac { --platform-accent: #737b89; }
+.platform-card--windows { --platform-accent: #0878c9; }
+.platform-card--linux { --platform-accent: #c88219; }
+
+.platform-card:hover::before,
+.platform-card:focus-within::before,
+.platform-card.is-selected::before {
+  opacity: 1;
 }
 
 .platform-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--platform-accent) 65%, var(--line));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--platform-accent) 14%, transparent);
+  transform: translateY(-3px);
 }
 
 .platform-card:active {
-  transform: scale(0.98);
+  transform: translateY(-1px) scale(0.98);
 }
 
 .platform-card input {
   position: absolute;
+  z-index: 2;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -513,8 +556,15 @@ button {
 }
 
 .platform-card.is-selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: var(--platform-accent);
+  box-shadow: inset 0 0 0 1px var(--platform-accent), 0 8px 22px color-mix(in srgb, var(--platform-accent) 16%, transparent);
+  animation: card-select 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes card-select {
+  0% { transform: scale(0.975); }
+  65% { transform: scale(1.025); }
+  100% { transform: scale(1); }
 }
 
 .platform-glyph {
@@ -523,7 +573,10 @@ button {
   height: 1.8rem;
   margin-bottom: 0.3rem;
   place-items: center;
-  color: var(--accent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--platform-accent) 12%, var(--chip));
+  color: var(--platform-accent);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease, color 180ms ease;
 }
 
 .platform-glyph svg {
@@ -536,7 +589,50 @@ button {
 }
 
 .platform-card small {
+  width: max-content;
+  padding: 0.08rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--platform-accent) 10%, var(--surface));
+  color: color-mix(in srgb, var(--platform-accent) 85%, var(--text));
   font-size: 0.8rem;
+}
+
+.platform-check {
+  position: absolute;
+  z-index: 3;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--platform-accent);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  opacity: 0;
+  transform: scale(0.65) rotate(-14deg);
+  transition: opacity 150ms ease, transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+.platform-card.is-selected .platform-check {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+
+.platform-card:hover .platform-glyph {
+  transform: translateY(-2px) rotate(-4deg);
+}
+
+.platform-card:focus-within .platform-glyph {
+  transform: translateY(-2px) rotate(-4deg);
+}
+
+.platform-card.is-selected .platform-glyph {
+  background: color-mix(in srgb, var(--platform-accent) 20%, var(--chip));
+  color: var(--platform-accent);
 }
 
 .rights-card {
@@ -1056,14 +1152,20 @@ button {
   }
 
   .cue,
-  .spinner {
+  .spinner,
+  .hero-tile,
+  .platform-card.is-selected {
     animation: none;
   }
 
+  .hero-wall,
   .button,
   .drop-zone,
   .drop-zone::after,
   .platform-card,
+  .platform-card::before,
+  .platform-glyph,
+  .platform-check,
   .preview-open img,
   .inspect-badge,
   .action-bar,

@@ -25,7 +25,18 @@ const WALL_TILES = Array.from({ length: 96 }, (_, index) => {
 });
 
 function PlatformGlyph({ platform }: { platform: Platform }) {
-  if (platform === "android" || platform === "ios") {
+  if (platform === "android") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 10a6 6 0 0 1 12 0v5H6z" />
+        <path d="m8 4-1.5-2M16 4l1.5-2M4 10v5M20 10v5M8 17v3M16 17v3" />
+        <circle cx="9.5" cy="8" r=".6" fill="currentColor" stroke="none" />
+        <circle cx="14.5" cy="8" r=".6" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+
+  if (platform === "ios") {
     return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
@@ -39,6 +50,23 @@ function PlatformGlyph({ platform }: { platform: Platform }) {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="4" y="4" width="16" height="12" rx="1.5" />
         <path d="M2.5 19h19M9 16l-1 3m7-3 1 3" />
+      </svg>
+    );
+  }
+
+  if (platform === "windows") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 5.5 10.5 4v7H3zM12.5 3.6 21 2v9h-8.5zM3 13h7.5v7L3 18.5zM12.5 13H21v9l-8.5-1.6z" />
+      </svg>
+    );
+  }
+
+  if (platform === "linux") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="13" rx="1.5" />
+        <path d="m7 8 3 2.5L7 13m5 0h4M9 21h6m-3-4v4" />
       </svg>
     );
   }
@@ -364,6 +392,11 @@ export default function Home() {
         section.style.setProperty("--spot-y", `${pointerY - bounds.top}px`);
       }
 
+      const parallaxX = reducedMotion.matches ? 0 : ((window.innerWidth / 2 - pointerX) / window.innerWidth) * 14;
+      const parallaxY = reducedMotion.matches ? 0 : ((window.innerHeight / 2 - pointerY) / window.innerHeight) * 10;
+      hero.style.setProperty("--wall-shift-x", `${parallaxX}px`);
+      hero.style.setProperty("--wall-shift-y", `${parallaxY}px`);
+
       const progress = Math.min(1, window.scrollY / (window.innerHeight * 0.7));
       if (heroContentRef.current) {
         heroContentRef.current.style.opacity = String(1 - progress);
@@ -465,7 +498,7 @@ export default function Home() {
         <section className="hero" id="hero" ref={heroRef} aria-label="Albumwall introduction">
           <div className="hero-wall" aria-hidden="true">
             {WALL_TILES.map((tile) => (
-              <div className="hero-tile" key={tile.index} style={{ background: tile.background }} />
+              <div className="hero-tile" key={tile.index} style={{ background: tile.background, animationDelay: `${(tile.index % 12) * -0.55}s` }} />
             ))}
           </div>
           <div className="hero-scrim" aria-hidden="true" />
@@ -556,7 +589,7 @@ export default function Home() {
                   const checked = platforms.includes(platform);
                   const name = platformName(platform);
                   return (
-                    <label className={`platform-card${checked ? " is-selected" : ""}`} key={platform}>
+                    <label className={`platform-card platform-card--${platform}${checked ? " is-selected" : ""}`} key={platform}>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -572,6 +605,7 @@ export default function Home() {
                       <span className="platform-glyph"><PlatformGlyph platform={platform} /></span>
                       <span className="platform-name">{name}</span>
                       <small>{count} sizes</small>
+                      <span className="platform-check" aria-hidden="true">✓</span>
                     </label>
                   );
                 })}
