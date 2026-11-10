@@ -629,9 +629,10 @@ button {
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   --platform-accent: var(--accent);
-  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 150ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), color 300ms ease, border-color 300ms ease, box-shadow 300ms ease, background-color 300ms ease;
 }
 
 .platform-card::before {
@@ -706,7 +707,7 @@ button {
   border-radius: 0.65rem;
   background: color-mix(in srgb, var(--platform-accent) 12%, var(--chip));
   color: var(--platform-accent);
-  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease, color 180ms ease;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 300ms ease, color 300ms ease;
 }
 
 .platform-glyph svg {
@@ -725,6 +726,7 @@ button {
   background: color-mix(in srgb, var(--platform-accent) 10%, var(--surface));
   color: color-mix(in srgb, var(--platform-accent) 85%, var(--text));
   font-size: 0.8rem;
+  transition: background-color 300ms ease, color 300ms ease;
 }
 
 .platform-check {
