@@ -6,11 +6,13 @@ import { PLATFORMS, PRESETS, type Platform } from "../src/presets";
 type Layout = "blur" | "solid";
 type Preview = { id: string; platform: Platform; label: string; data: string };
 type ViewMode = "quick" | "full" | "compare";
+type Theme = "light" | "dark";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const THEME_STORAGE_KEY = "albumwall-theme";
 
 const WALL_TILES = Array.from({ length: 96 }, (_, index) => {
   const hue = (index * 137.5) % 360;
@@ -79,6 +81,35 @@ function PlatformGlyph({ platform }: { platform: Platform }) {
   );
 }
 
+function ThemeToggle({ theme, onToggle, hero = false }: { theme: Theme | null; onToggle: () => void; hero?: boolean }) {
+  const label = theme === null
+    ? "Toggle light and dark mode"
+    : `Switch to ${theme === "dark" ? "light" : "dark"} mode`;
+
+  return (
+    <button
+      className={`button theme-toggle${hero ? " theme-toggle--hero" : ""}`}
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={theme === "dark"}
+      title={label}
+    >
+      {theme === "dark" ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.5" />
+          <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.6 8.6 0 1 0 10.7 10.7Z" />
+        </svg>
+      )}
+      <span className="theme-toggle-label">{theme ?? "Theme"}</span>
+    </button>
+  );
+}
+
 function platformName(platform: Platform) {
   if (platform === "mac") return "Mac";
   if (platform === "ios") return "iOS";
@@ -86,6 +117,7 @@ function platformName(platform: Platform) {
 }
 
 export default function Home() {
+  const [theme, setTheme] = useState<Theme | null>(null);
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
@@ -115,12 +147,51 @@ export default function Home() {
   const artworkUrlRef = useRef<string | null>(null);
   const viewerWasOpen = useRef(false);
   const previousOverflow = useRef("");
+  const manualThemeChoiceRef = useRef(false);
   const previewGeneration = useRef(0);
   const previewRequestId = useRef(0);
   const fullRequestId = useRef(0);
   const previewController = useRef<AbortController | null>(null);
   const fullController = useRef<AbortController | null>(null);
   const objectUrls = useRef(new Set<string>());
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    let storedTheme: string | null = null;
+    try {
+      storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {
+      storedTheme = null;
+    }
+    manualThemeChoiceRef.current = storedTheme === "light" || storedTheme === "dark";
+
+    const applyTheme = (next: Theme) => {
+      document.documentElement.dataset.theme = next;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "dark" ? "#121212" : "#f5f5f7");
+      setTheme(next);
+    };
+
+    applyTheme(manualThemeChoiceRef.current ? storedTheme as Theme : media.matches ? "dark" : "light");
+    const followSystemTheme = (event: MediaQueryListEvent) => {
+      if (!manualThemeChoiceRef.current) applyTheme(event.matches ? "dark" : "light");
+    };
+    media.addEventListener("change", followSystemTheme);
+    return () => media.removeEventListener("change", followSystemTheme);
+  }, []);
+
+  function toggleTheme() {
+    const current = theme ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next: Theme = current === "dark" ? "light" : "dark";
+    manualThemeChoiceRef.current = true;
+    document.documentElement.dataset.theme = next;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "dark" ? "#121212" : "#f5f5f7");
+    setTheme(next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // The active theme still applies when storage is unavailable.
+    }
+  }
 
   const activeIndex = previews.findIndex((preview) => preview.id === activeId);
   const active = activeIndex >= 0 ? previews[activeIndex] : undefined;
@@ -503,6 +574,7 @@ export default function Home() {
           </div>
           <div className="hero-scrim" aria-hidden="true" />
           <span className="brand">Albumwall</span>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} hero />
           <div className="hero-content" ref={heroContentRef}>
             <h1>Your album art,<br />on every screen.</h1>
             <p>Make device wallpapers from an image you own or are licensed to use.</p>
@@ -526,7 +598,10 @@ export default function Home() {
                 <h2 className="tool-title" id="appTitle" ref={appTitleRef} tabIndex={-1}>Albumwall</h2>
                 <p className="tagline">Make device wallpapers from an image you own or are licensed to use.</p>
               </div>
-              <button className="button intro-button" onClick={scrollToIntro} aria-label="Back to introduction">↑ Intro</button>
+              <div className="tool-top-actions">
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
+                <button className="button intro-button" onClick={scrollToIntro} aria-label="Back to introduction">↑ Intro</button>
+              </div>
             </header>
 
             <section className="step" aria-labelledby="step-artwork">
