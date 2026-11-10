@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { unzipSync } from "fflate";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 const blob = vi.hoisted(() => ({ issueSignedToken: vi.fn(), presignUrl: vi.fn(), get: vi.fn(), del: vi.fn(), list: vi.fn() }));
 vi.mock("@vercel/blob", () => blob);
@@ -6,7 +7,7 @@ import { handlePreview, handleFullPreview, handleZip, handleUploadUrl, handleTem
 const uuid = "550e8400-e29b-41d4-a716-446655440000";
 const path = `albumwall-temp/${uuid}.png`;
 const png = () => sharp({ create: { width: 64, height: 64, channels: 3, background: "#cc3366" } }).png().toBuffer();
-const body = (pathname = path, fields: Record<string, unknown> = {}) => new Request("http://localhost/api/preview", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pathname, platforms: "ios", layout: "blur", rights: true, ...fields }) });
+const body = (pathname = path, fields: Record<string, unknown> = {}) => new Request("http://localhost/api/preview", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pathname, platforms: "ios", rights: true, ...fields }) });
 async function mockBlob(content?: Buffer) {
   const data = content ?? await png();
   blob.get.mockResolvedValue({ statusCode: 200, blob: { etag: '"etag"', size: data.length }, stream: new ReadableStream({ start(c) { c.enqueue(new Uint8Array(data)); c.close(); } }) });
@@ -67,6 +68,13 @@ describe("private Blob upload and processing", () => {
   });
   it("streams ZIP output and deletes source on success", async () => {
     await mockBlob(); const res = await handleZip(body()); expect(res.status).toBe(200); expect(res.headers.get("content-disposition")).toContain("albumwall.zip"); expect(res.body).toBeTruthy(); expect(blob.del).toHaveBeenCalledWith(path, { ifMatch: '"etag"' }); expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0);
+  });
+  it("uses the selected aspect ratio in ZIP wallpaper dimensions", async () => {
+    await mockBlob();
+    const response = await handleZip(body(path, { aspectRatio: "9:16" }));
+    expect(response.status).toBe(200);
+    const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
+    expect(await sharp(Buffer.from(files["ios/ios-iphone-13.png"])).metadata()).toMatchObject({ width: 1424, height: 2532 });
   });
   it("authenticates cleanup and deletes only stale temp objects with conditional ETags", async () => {
     process.env.CRON_SECRET = "a-long-cron-secret";

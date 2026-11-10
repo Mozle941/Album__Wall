@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ASPECT_RATIOS, PLATFORMS, PRESETS, type AspectRatio, type Platform } from "../src/presets";
 
-type Layout = "blur" | "solid";
 type Preview = { id: string; platform: Platform; label: string; width: number; height: number; data: string };
 type ViewMode = "quick" | "full" | "compare";
 type Theme = "light" | "dark";
@@ -121,7 +120,6 @@ export default function Home() {
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
-  const [layout, setLayout] = useState<Layout>("blur");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("device");
   const [rights, setRights] = useState(false);
   const [credits, setCredits] = useState("");
@@ -244,7 +242,7 @@ export default function Home() {
   }
 
   function metadata(pathname: string) {
-    return { pathname, platforms: platforms.join(","), layout, aspectRatio, rights, credits };
+    return { pathname, platforms: platforms.join(","), aspectRatio, rights, credits };
   }
 
   function releaseArtworkUrl() {
@@ -702,22 +700,8 @@ export default function Home() {
                 <span>I own this image or have permission/a license that permits its use, and I will provide attribution when required.</span>
               </label>
               <details className="options-panel">
-                <summary>Options: style and attribution</summary>
+                <summary>Options: aspect ratio and attribution</summary>
                 <div className="options-content">
-                  <label className="field">
-                    <span>Style</span>
-                    <select
-                      value={layout}
-                      disabled={busy}
-                      onChange={(event) => {
-                        setLayout(event.target.value as Layout);
-                        invalidate();
-                      }}
-                    >
-                      <option value="blur">Blurred background</option>
-                      <option value="solid">Solid background</option>
-                    </select>
-                  </label>
                   <label className="field">
                     <span>Wallpaper aspect ratio</span>
                     <select
@@ -733,6 +717,7 @@ export default function Home() {
                       ))}
                     </select>
                   </label>
+                  <p className="ratio-note">Artwork fills the selected size. Edges may be cropped to match the chosen ratio.</p>
                   <label className="field">
                     <span>Optional attribution / credit</span>
                     <input

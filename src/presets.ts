@@ -7,10 +7,14 @@ export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export function dimensionsForRatio(width: number, height: number, ratio: AspectRatio): { width: number; height: number } {
   if (ratio === "device") return { width, height };
   const [ratioWidth, ratioHeight] = ratio.split(":").map(Number);
-  if (width >= height) {
-    return { width, height: Math.round(width * ratioHeight / ratioWidth) };
+  const longEdge = Math.max(width, height);
+  if (ratioWidth === ratioHeight) {
+    return { width: longEdge, height: longEdge };
   }
-  return { width: Math.round(height * ratioWidth / ratioHeight), height };
+  if (ratioWidth < ratioHeight) {
+    return { width: Math.round(longEdge * ratioWidth / ratioHeight), height: longEdge };
+  }
+  return { width: longEdge, height: Math.round(longEdge * ratioHeight / ratioWidth) };
 }
 
 export interface Preset {

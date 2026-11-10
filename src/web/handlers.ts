@@ -3,7 +3,7 @@ import { del, get, issueSignedToken, list, presignUrl } from "@vercel/blob";
 import { buildZip } from "../bundle";
 import { validateImage, ImageInputError, MAX_IMAGE_BYTES } from "../image-input";
 import { ASPECT_RATIOS, dimensionsForRatio, PLATFORMS, presetsFor, type AspectRatio, type Platform } from "../presets";
-import { LAYOUTS, renderWallpaper, type Layout } from "../render";
+import { renderWallpaper } from "../render";
 const PREVIEW_SCALE = 0.15;
 export const TEMP_PREFIX = "albumwall-temp/";
 const MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -22,13 +22,11 @@ function fields(data: Record<string, unknown>) {
   if (!raw.length) throw new HttpError(400, "Select at least one platform");
   const platforms = [...new Set(raw)] as Platform[];
   for (const platform of platforms) if (!PLATFORMS.includes(platform)) throw new HttpError(400, `Unknown platform: ${platform}`);
-  const layout = String(data.layout ?? "blur") as Layout;
-  if (!LAYOUTS.includes(layout)) throw new HttpError(400, `Unknown layout: ${layout}`);
   const aspectRatio = String(data.aspectRatio ?? "device") as AspectRatio;
   if (!ASPECT_RATIOS.includes(aspectRatio)) throw new HttpError(400, `Unknown aspect ratio: ${aspectRatio}`);
   const credits = String(data.credits ?? "").trim();
   if (credits.length > 2000) throw new HttpError(400, "Attribution text must be 2,000 characters or fewer");
-  return { presets: presetsFor(platforms), layout, aspectRatio, credits };
+  return { presets: presetsFor(platforms), aspectRatio, credits };
 }
 function validPath(path: unknown): path is string { return typeof path === "string" && UUID_PATH.test(path); }
 async function jsonObject(req: Request, message: string): Promise<Record<string, unknown>> {
@@ -70,12 +68,12 @@ export async function handleUploadUrl(req: Request): Promise<Response> {
 }
 export function handlePreview(req: Request): Promise<Response> {
   return guarded(async () => {
-    const { path, presets, layout, aspectRatio } = await metadata(req);
+    const { path, presets, aspectRatio } = await metadata(req);
     let etag: string | undefined;
     try {
       const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
       const previews = [];
-      for (const preset of presets) { const dimensions = dimensionsForRatio(preset.width, preset.height, aspectRatio); const width = Math.max(1, Math.round(dimensions.width * PREVIEW_SCALE)); const height = Math.max(1, Math.round(dimensions.height * PREVIEW_SCALE)); const data = await renderWallpaper(art, { width, height }, { layout }); previews.push({ id: preset.id, platform: preset.platform, label: preset.label, width: dimensions.width, height: dimensions.height, data: `data:image/png;base64,${data.toString("base64")}` }); }
+      for (const preset of presets) { const dimensions = dimensionsForRatio(preset.width, preset.height, aspectRatio); const width = Math.max(1, Math.round(dimensions.width * PREVIEW_SCALE)); const height = Math.max(1, Math.round(dimensions.height * PREVIEW_SCALE)); const data = await renderWallpaper(art, { width, height }); previews.push({ id: preset.id, platform: preset.platform, label: preset.label, width: dimensions.width, height: dimensions.height, data: `data:image/png;base64,${data.toString("base64")}` }); }
       return json({ previews });
     } finally { await del(path, etag ? { ifMatch: etag } : undefined); }
   });
@@ -87,13 +85,13 @@ export function handleFullPreview(req: Request): Promise<Response> {
     const path = body.pathname;
     let etag: string | undefined;
     try {
-      const { presets, layout, aspectRatio } = fields(body);
+      const { presets, aspectRatio } = fields(body);
       const presetId = typeof body.presetId === "string" ? body.presetId : "";
       const preset = presets.find((item) => item.id === presetId);
       if (!preset) throw new HttpError(400, "Requested preset is not included in the selected platforms");
       const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
       const dimensions = dimensionsForRatio(preset.width, preset.height, aspectRatio);
-      const data = await renderWallpaper(art, dimensions, { layout });
+      const data = await renderWallpaper(art, dimensions);
       const stream = new ReadableStream<Uint8Array>({ start(controller) { const chunkSize = 64 * 1024; for (let offset = 0; offset < data.length; offset += chunkSize) controller.enqueue(new Uint8Array(data.subarray(offset, Math.min(offset + chunkSize, data.length)))); controller.close(); } });
       return new Response(stream, { headers: { "content-type": "image/png", "content-disposition": `inline; filename="${preset.id}.png"`, "cache-control": "no-store" } });
     } finally { await del(path, etag ? { ifMatch: etag } : undefined); }
@@ -101,12 +99,12 @@ export function handleFullPreview(req: Request): Promise<Response> {
 }
 export function handleZip(req: Request): Promise<Response> {
   return guarded(async () => {
-    const { path, presets, layout, aspectRatio, credits } = await metadata(req);
+    const { path, presets, aspectRatio, credits } = await metadata(req);
     let etag: string | undefined;
     try {
       const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
       const ratioPresets = presets.map((preset) => ({ ...preset, ...dimensionsForRatio(preset.width, preset.height, aspectRatio) }));
-      const zip = await buildZip(art, ratioPresets, { layout }, credits || undefined);
+      const zip = await buildZip(art, ratioPresets, credits || undefined);
       const stream = new ReadableStream<Uint8Array>({ start(controller) { const chunkSize = 64 * 1024; for (let offset = 0; offset < zip.length; offset += chunkSize) controller.enqueue(new Uint8Array(zip.subarray(offset, Math.min(offset + chunkSize, zip.length)))); controller.close(); } });
       return new Response(stream, { headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="albumwall.zip"', "cache-control": "no-store" } });
     } finally { await del(path, etag ? { ifMatch: etag } : undefined); }

@@ -2,14 +2,12 @@ import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { generateAll } from "./generate";
 import { PLATFORMS, presetsFor, type Platform } from "./presets";
-import { foregroundSide, LAYOUTS, type Layout } from "./render";
 import { validateImage } from "./image-input";
 const USAGE = `Usage: npm run cli -- --image ./cover.jpg [options]
 Input image must be yours or licensed/otherwise permitted for your use; provide attribution when required.
 
 Options:
   --platform  comma list of: ${PLATFORMS.join(",")} (required)
-  --layout    ${LAYOUTS.join(" | ")} (default: blur)
   --out       output directory (default: out)
   --image     local PNG, JPEG, or WebP file (required)`;
 
@@ -18,7 +16,6 @@ async function main() {
     allowPositionals: false,
     options: {
       platform: { type: "string" },
-      layout: { type: "string", default: "blur" },
       out: { type: "string", default: "out" },
       image: { type: "string" },
     },
@@ -34,20 +31,16 @@ async function main() {
   for (const p of platforms ?? []) {
     if (!PLATFORMS.includes(p)) throw new Error(`Unknown platform: ${p}`);
   }
-  const layout = values.layout as Layout;
-  if (!LAYOUTS.includes(layout)) throw new Error(`Unknown layout: ${layout}`);
-
   const art = await readFile(values.image);
-  const { width: artWidth } = await validateImage(art);
+  const { width: artWidth, height: artHeight } = await validateImage(art);
   const presets = presetsFor(platforms);
   for (const preset of presets) {
-    const side = foregroundSide(preset);
-    if (side > artWidth) {
-      console.warn(`  note: ${preset.id} upscales art ${artWidth}px -> ${side}px (softer)`);
+    if (preset.width > artWidth || preset.height > artHeight) {
+      console.warn(`  note: ${preset.id} upscales art ${artWidth}×${artHeight}px -> ${preset.width}×${preset.height}px (softer)`);
     }
   }
 
-  const files = await generateAll(art, presets, values.out!, { layout });
+  const files = await generateAll(art, presets, values.out!);
   console.log(`Wrote ${files.length} wallpapers to ${values.out}/`);
 }
 

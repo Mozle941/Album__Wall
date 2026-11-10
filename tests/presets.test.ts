@@ -32,6 +32,6 @@ describe("presets", () => {
     expect(dimensionsForRatio(1170, 2532, "device")).toEqual({ width: 1170, height: 2532 });
     expect(dimensionsForRatio(1170, 2532, "9:16")).toEqual({ width: 1424, height: 2532 });
     expect(dimensionsForRatio(1920, 1080, "1:1")).toEqual({ width: 1920, height: 1920 });
-    expect(dimensionsForRatio(3024, 1964, "4:5")).toEqual({ width: 3024, height: 3780 });
+    expect(dimensionsForRatio(3024, 1964, "4:5")).toEqual({ width: 2419, height: 3024 });
   });
 });

@@ -810,6 +810,13 @@ button {
   padding-bottom: 0.7rem;
 }
 
+.ratio-note {
+  grid-column: 1 / -1;
+  margin: -0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .field {
   display: grid;
   min-width: 0;
