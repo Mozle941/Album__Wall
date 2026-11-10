@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PRESETS, PLATFORMS, type Platform } from "../src/presets";
+import { PLATFORMS, PRESETS, type Platform } from "../src/presets";
 
 type Layout = "blur" | "solid";
 type Preview = { id: string; platform: Platform; label: string; data: string };
@@ -9,9 +9,57 @@ type ViewMode = "quick" | "full" | "compare";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+const WALL_TILES = Array.from({ length: 96 }, (_, index) => {
+  const hue = (index * 137.5) % 360;
+  const secondHue = (hue + 50) % 360;
+  const deepHue = (hue + 120) % 360;
+  const background = index % 3 === 0
+    ? `radial-gradient(circle at 30% 28%, hsl(${hue} 90% 64%), hsl(${secondHue} 80% 36%) 58%, hsl(${deepHue} 70% 14%))`
+    : index % 3 === 1
+      ? `linear-gradient(${(index * 29) % 180}deg, hsl(${hue} 85% 55%) 50%, hsl(${(hue + 160) % 360} 80% 30%) 50%)`
+      : `conic-gradient(from ${(index * 40) % 360}deg at 50% 60%, hsl(${hue} 90% 55%), hsl(${(hue + 90) % 360} 85% 45%), hsl(${(hue + 200) % 360} 80% 25%), hsl(${hue} 90% 55%))`;
+  return { index, background };
+});
+
+function PlatformGlyph({ platform }: { platform: Platform }) {
+  if (platform === "android" || platform === "ios") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
+        <path d="M11 18.5h2" />
+      </svg>
+    );
+  }
+
+  if (platform === "mac") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="12" rx="1.5" />
+        <path d="M2.5 19h19M9 16l-1 3m7-3 1 3" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="12" rx="1.5" />
+      <path d="M9 20h6M12 16v4" />
+    </svg>
+  );
+}
+
+function platformName(platform: Platform) {
+  if (platform === "mac") return "Mac";
+  if (platform === "ios") return "iOS";
+  return platform.charAt(0).toUpperCase() + platform.slice(1);
+}
 
 export default function Home() {
   const [image, setImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [layout, setLayout] = useState<Layout>("blur");
   const [rights, setRights] = useState(false);
@@ -24,10 +72,19 @@ export default function Home() {
   const [mode, setMode] = useState<ViewMode>("quick");
   const [fullImages, setFullImages] = useState<Record<string, string>>({});
   const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [showActionBar, setShowActionBar] = useState(false);
 
+  const heroRef = useRef<HTMLElement>(null);
+  const heroContentRef = useRef<HTMLDivElement>(null);
+  const heroHintRef = useRef<HTMLParagraphElement>(null);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const appRef = useRef<HTMLElement>(null);
+  const appTitleRef = useRef<HTMLHeadingElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
+  const artworkUrlRef = useRef<string | null>(null);
   const viewerWasOpen = useRef(false);
   const previousOverflow = useRef("");
   const previewGeneration = useRef(0);
@@ -42,6 +99,17 @@ export default function Home() {
   const activePreset = active ? PRESETS.find((preset) => preset.id === active.id) : undefined;
   const selected = PRESETS.filter((preset) => platforms.includes(preset.platform));
   const canGenerate = !!image && platforms.length > 0 && rights && !busy;
+  const actionReason = busy
+    ? "Preparing your wallpapers…"
+    : !image
+      ? "Add an image to continue"
+      : platforms.length === 0
+        ? "Choose at least one platform"
+        : !rights
+          ? "Confirm you have permission to use this image"
+          : previews.length > 0
+            ? `${previews.length} previews ready to inspect`
+            : `${selected.length} wallpaper sizes selected`;
 
   function cancelFullRequest() {
     fullRequestId.current++;
@@ -79,9 +147,48 @@ export default function Home() {
     return { pathname, platforms: platforms.join(","), layout, rights, credits };
   }
 
+  function releaseArtworkUrl() {
+    if (artworkUrlRef.current) URL.revokeObjectURL(artworkUrlRef.current);
+    artworkUrlRef.current = null;
+    setImagePreviewUrl(null);
+  }
+
+  function chooseArtwork(file: File | null) {
+    if (!file || busy) return;
+    invalidate();
+    setError("");
+
+    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+      releaseArtworkUrl();
+      setImage(null);
+      setError("Choose a PNG, JPEG, or WebP image.");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      releaseArtworkUrl();
+      setImage(null);
+      setError("Image exceeds the 10 MiB upload limit.");
+      return;
+    }
+
+    releaseArtworkUrl();
+    const localUrl = URL.createObjectURL(file);
+    artworkUrlRef.current = localUrl;
+    setImagePreviewUrl(localUrl);
+    setImage(file);
+  }
+
+  function removeArtwork() {
+    releaseArtworkUrl();
+    setImage(null);
+    invalidate();
+    setError("");
+  }
+
   async function upload(signal?: AbortSignal): Promise<string> {
     if (!image) throw new Error("Select an image first");
-    if (image.size > 10 * 1024 * 1024) throw new Error("Image exceeds the 10 MiB upload limit");
+    if (image.size > MAX_IMAGE_SIZE) throw new Error("Image exceeds the 10 MiB upload limit");
     const signed = await fetch("/api/upload-url", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -227,6 +334,72 @@ export default function Home() {
     setMode("quick");
   }
 
+  function scrollToTool() {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    appRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    window.setTimeout(() => appTitleRef.current?.focus({ preventScroll: true }), reducedMotion ? 0 : 600);
+  }
+
+  function scrollToIntro() {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    heroRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    window.setTimeout(() => startRef.current?.focus({ preventScroll: true }), reducedMotion ? 0 : 600);
+  }
+
+  useEffect(() => {
+    const hero = heroRef.current;
+    const app = appRef.current;
+    if (!hero || !app) return;
+
+    let frame = 0;
+    let pointerX = window.innerWidth / 2;
+    let pointerY = window.innerHeight / 2;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    const update = () => {
+      frame = 0;
+      for (const section of [hero, app]) {
+        const bounds = section.getBoundingClientRect();
+        section.style.setProperty("--spot-x", `${pointerX - bounds.left}px`);
+        section.style.setProperty("--spot-y", `${pointerY - bounds.top}px`);
+      }
+
+      const progress = Math.min(1, window.scrollY / (window.innerHeight * 0.7));
+      if (heroContentRef.current) {
+        heroContentRef.current.style.opacity = String(1 - progress);
+        heroContentRef.current.style.transform = reducedMotion.matches
+          ? ""
+          : `translateY(${-progress * 40}px) scale(${1 - progress * 0.04})`;
+      }
+      if (heroHintRef.current) heroHintRef.current.style.opacity = String(1 - progress);
+      const shouldShow = app.getBoundingClientRect().top < window.innerHeight * 0.55;
+      setShowActionBar((current) => current === shouldShow ? current : shouldShow);
+    };
+
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      scheduleUpdate();
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    reducedMotion.addEventListener("change", scheduleUpdate);
+    update();
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      reducedMotion.removeEventListener("change", scheduleUpdate);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   useEffect(() => {
     if (!active) {
       if (viewerWasOpen.current) {
@@ -260,7 +433,7 @@ export default function Home() {
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         const focusOutside = !dialogRef.current?.contains(document.activeElement);
-        if ((event.shiftKey && (document.activeElement === first || focusOutside))) {
+        if (event.shiftKey && (document.activeElement === first || focusOutside)) {
           event.preventDefault();
           last.focus();
         } else if (!event.shiftKey && (document.activeElement === last || focusOutside)) {
@@ -282,114 +455,229 @@ export default function Home() {
     fullController.current?.abort();
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
     objectUrls.current.clear();
+    if (artworkUrlRef.current) URL.revokeObjectURL(artworkUrlRef.current);
+    artworkUrlRef.current = null;
   }, []);
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
-      <div inert={active ? true : undefined} aria-hidden={active ? "true" : undefined}>
-        <h1>Albumwall</h1>
-        <p>Make device wallpapers from an image you own or are licensed to use.</p>
-        <label>
-          Artwork image (PNG, JPEG, or WebP; max 10 MiB)
-          <br />
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={busy}
-            onChange={(event) => {
-              setImage(event.target.files?.[0] ?? null);
-              invalidate();
-            }}
-          />
-        </label>
-        <p style={{ fontSize: 13 }}>
-          Privacy: uploads go directly to a private Vercel Blob store. The temporary copy is deleted after each processing request; abandoned uploads are swept daily. Images are not publicly accessible or attached to end-user accounts.
-        </p>
-        <div style={{ margin: "12px 0", display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {PLATFORMS.map((platform) => (
-            <label key={platform}>
-              <input
-                type="checkbox"
-                checked={platforms.includes(platform)}
-                disabled={busy}
-                onChange={() => {
-                  setPlatforms((current) => current.includes(platform)
-                    ? current.filter((item) => item !== platform)
-                    : [...current, platform]);
-                  invalidate();
-                }}
-              /> {platform}
-            </label>
-          ))}
-          <select
-            value={layout}
-            disabled={busy}
-            onChange={(event) => {
-              setLayout(event.target.value as Layout);
-              invalidate();
-            }}
-          >
-            <option value="blur">blur</option>
-            <option value="solid">solid</option>
-          </select>
-        </div>
-        <label style={{ display: "block", margin: "12px 0" }}>
-          <input
-            type="checkbox"
-            checked={rights}
-            disabled={busy}
-            onChange={(event) => setRights(event.target.checked)}
-          /> I own this image or have permission/a license that permits its use, and I will provide attribution when required.
-        </label>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          Optional attribution / credit
-          <br />
-          <input
-            maxLength={2000}
-            value={credits}
-            disabled={busy}
-            onChange={(event) => setCredits(event.target.value)}
-            placeholder="Credit text (included as CREDITS.txt)"
-            style={{ width: "100%", padding: 8, boxSizing: "border-box" }}
-          />
-        </label>
-        <button onClick={() => void preview()} disabled={!canGenerate}>
-          {busy ? "Preparing…" : `Preview ${selected.length} wallpaper${selected.length === 1 ? "" : "s"}`}
-        </button>{" "}
-        <button onClick={() => void download()} disabled={!canGenerate}>Download ZIP</button>
-        {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
-        {previews.length > 0 && (
-          <div>
-            <div style={{ margin: "12px 0" }}>
-              Preview ready for {previews.length} wallpapers. Select any image to inspect its quick preview or compare it with a native-resolution render.
-              {" "}<button onClick={() => void download()} disabled={!canGenerate}>Download ZIP</button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
-              {previews.map((preview) => (
-                <figure key={preview.id} style={{ margin: 0 }}>
-                  <button
-                    onClick={(event) => {
-                      openerRef.current = event.currentTarget;
-                      setActiveId(preview.id);
-                      setMode("quick");
-                      setViewerError("");
-                    }}
-                    aria-haspopup="dialog"
-                    aria-label={`Open full-screen preview: ${preview.label}`}
-                    style={{ cursor: "zoom-in", border: 0, padding: 0, background: "transparent", width: "100%" }}
-                  >
-                    <img src={preview.data} alt={preview.label} style={{ width: "100%", height: "auto" }} />
-                  </button>
-                  <figcaption style={{ fontSize: 12 }}>{preview.label}</figcaption>
-                </figure>
-              ))}
-            </div>
+    <>
+      <div className="site-shell" inert={active ? true : undefined} aria-hidden={active ? "true" : undefined}>
+        <section className="hero" id="hero" ref={heroRef} aria-label="Albumwall introduction">
+          <div className="hero-wall" aria-hidden="true">
+            {WALL_TILES.map((tile) => (
+              <div className="hero-tile" key={tile.index} style={{ background: tile.background }} />
+            ))}
           </div>
-        )}
+          <div className="hero-scrim" aria-hidden="true" />
+          <span className="brand">Albumwall</span>
+          <div className="hero-content" ref={heroContentRef}>
+            <h1>Your album art,<br />on every screen.</h1>
+            <p>Make device wallpapers from an image you own or are licensed to use.</p>
+            <button className="button hero-button" onClick={scrollToTool} ref={startRef}>
+              Make wallpapers <span className="cue" aria-hidden="true">↓</span>
+            </button>
+          </div>
+          <p className="hero-hint" ref={heroHintRef}>Move your cursor or drag to light up the wall</p>
+        </section>
+
+        <main className="app-section" id="tool" ref={appRef}>
+          <div
+            className={`app-art${imagePreviewUrl ? " on" : ""}`}
+            aria-hidden="true"
+            style={imagePreviewUrl ? { backgroundImage: `url("${imagePreviewUrl}")` } : undefined}
+          />
+          <div className="app-veil" aria-hidden="true" />
+          <div className="tool-shell">
+            <header className="tool-top">
+              <div>
+                <h2 className="tool-title" id="appTitle" ref={appTitleRef} tabIndex={-1}>Albumwall</h2>
+                <p className="tagline">Make device wallpapers from an image you own or are licensed to use.</p>
+              </div>
+              <button className="button intro-button" onClick={scrollToIntro} aria-label="Back to introduction">↑ Intro</button>
+            </header>
+
+            <section className="step" aria-labelledby="step-artwork">
+              <h2 className="step-title" id="step-artwork"><span className="step-number">1</span>Artwork</h2>
+              {image ? (
+                <div className="file-chip">
+                  <span className="file-mark" aria-hidden="true">▧</span>
+                  <strong title={image.name}>{image.name}</strong>
+                  <span className="file-size">{image.size < 1024 * 1024 ? `${Math.max(1, Math.round(image.size / 1024))} KiB` : `${(image.size / (1024 * 1024)).toFixed(1)} MiB`}</span>
+                  <button className="button quiet-button" type="button" onClick={removeArtwork} disabled={busy}>Remove</button>
+                </div>
+              ) : (
+                <label
+                  className={`drop-zone${dragging ? " is-dragging" : ""}`}
+                  onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+                  onDragOver={(event) => { event.preventDefault(); if (!dragging) setDragging(true); }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDragging(false);
+                    chooseArtwork(event.dataTransfer.files[0] ?? null);
+                  }}
+                >
+                  <span className="upload-symbol" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" />
+                      <path d="M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" />
+                    </svg>
+                  </span>
+                  <strong>Drop an image here or click to choose</strong>
+                  <small>PNG, JPEG, or WebP · max 10 MiB</small>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy}
+                    aria-label="Artwork image (PNG, JPEG, or WebP; max 10 MiB)"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0] ?? null;
+                      event.currentTarget.value = "";
+                      chooseArtwork(file);
+                    }}
+                  />
+                </label>
+              )}
+              <p className="privacy-copy">
+                Privacy: uploads go directly to a private Vercel Blob store. The temporary copy is deleted after each processing request; abandoned uploads are swept daily. Images are not publicly accessible or attached to end-user accounts.
+              </p>
+              <div className="live-message" aria-live="polite">
+                {error && <p className="message-error" role="alert">{error}</p>}
+              </div>
+            </section>
+
+            <section className="step" aria-labelledby="step-platforms">
+              <h2 className="step-title" id="step-platforms"><span className="step-number">2</span>Platforms</h2>
+              <div className="platform-grid">
+                {PLATFORMS.map((platform) => {
+                  const count = PRESETS.filter((preset) => preset.platform === platform).length;
+                  const checked = platforms.includes(platform);
+                  const name = platformName(platform);
+                  return (
+                    <label className={`platform-card${checked ? " is-selected" : ""}`} key={platform}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={busy}
+                        aria-label={`Include ${name} wallpapers`}
+                        onChange={() => {
+                          setPlatforms((current) => current.includes(platform)
+                            ? current.filter((item) => item !== platform)
+                            : [...current, platform]);
+                          invalidate();
+                        }}
+                      />
+                      <span className="platform-glyph"><PlatformGlyph platform={platform} /></span>
+                      <span className="platform-name">{name}</span>
+                      <small>{count} sizes</small>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="step" aria-labelledby="step-rights">
+              <h2 className="step-title" id="step-rights"><span className="step-number">3</span>Rights</h2>
+              <label className="rights-card">
+                <input
+                  type="checkbox"
+                  checked={rights}
+                  disabled={busy}
+                  onChange={(event) => setRights(event.target.checked)}
+                />
+                <span>I own this image or have permission/a license that permits its use, and I will provide attribution when required.</span>
+              </label>
+              <details className="options-panel">
+                <summary>Options: style and attribution</summary>
+                <div className="options-content">
+                  <label className="field">
+                    <span>Style</span>
+                    <select
+                      value={layout}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setLayout(event.target.value as Layout);
+                        invalidate();
+                      }}
+                    >
+                      <option value="blur">Blurred background</option>
+                      <option value="solid">Solid background</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Optional attribution / credit</span>
+                    <input
+                      type="text"
+                      maxLength={2000}
+                      value={credits}
+                      disabled={busy}
+                      onChange={(event) => setCredits(event.target.value)}
+                      placeholder="Credit text (included as CREDITS.txt)"
+                    />
+                  </label>
+                </div>
+              </details>
+            </section>
+
+            {previews.length > 0 && (
+              <section className="step preview-step" aria-labelledby="step-preview">
+                <div className="preview-heading">
+                  <div>
+                    <h2 className="step-title" id="step-preview"><span className="step-number">4</span>Preview</h2>
+                    <p className="privacy-copy" role="status">
+                      Preview ready for {previews.length} wallpapers. Select any image to inspect its quick preview or compare it with a native-resolution render.
+                    </p>
+                  </div>
+                </div>
+                <div className="preview-grid">
+                  {previews.map((preview) => {
+                    const preset = PRESETS.find((item) => item.id === preview.id);
+                    return (
+                      <figure className={`preview-card${preset && preset.width > preset.height ? " is-wide" : ""}`} key={preview.id}>
+                        <button
+                          className="preview-open"
+                          onClick={(event) => {
+                            openerRef.current = event.currentTarget;
+                            setActiveId(preview.id);
+                            setMode("quick");
+                            setViewerError("");
+                          }}
+                          aria-haspopup="dialog"
+                          aria-label={`Open full-screen comparison preview: ${preview.label}`}
+                        >
+                          <img src={preview.data} alt={preview.label} />
+                          <span className="inspect-badge">Inspect ↗</span>
+                        </button>
+                        <figcaption>{preview.label}</figcaption>
+                      </figure>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            <p className="tool-note">Choose artwork you own or are licensed to use. Your image is processed temporarily and is not made public.</p>
+          </div>
+        </main>
+
+        <div className={`action-bar${showActionBar ? " is-visible" : ""}`}>
+          <div className="action-bar-inner">
+            <span className="action-reason" id="action-status" aria-live="polite">{actionReason}</span>
+            <button className="button preview-action" type="button" onClick={() => void preview()} disabled={!canGenerate} aria-describedby="action-status">
+              {busy ? <><span className="spinner" aria-hidden="true" />Preparing…</> : `Preview ${selected.length} wallpaper${selected.length === 1 ? "" : "s"}`}
+            </button>
+            <button className="button primary-action" type="button" onClick={() => void download()} disabled={!canGenerate} aria-describedby="action-status">
+              Download ZIP
+            </button>
+          </div>
+        </div>
       </div>
 
       {active && activePreset && (
         <div
+          className="viewer"
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
@@ -397,24 +685,27 @@ export default function Home() {
           onClick={(event) => {
             if (event.target === event.currentTarget) closeViewer();
           }}
-          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,.96)", color: "white", display: "flex", flexDirection: "column", padding: 12, boxSizing: "border-box" }}
         >
           <header className="viewer-header">
-            <button ref={closeRef} onClick={closeViewer} aria-label="Close preview">Close</button>
-            <button onClick={() => navigate(-1)} aria-label="Previous preset">← Previous</button>
-            <button onClick={() => navigate(1)} aria-label="Next preset">Next →</button>
-            <strong style={{ flex: 1 }}>{active.label}</strong>
-            <span>{activePreset.width} × {activePreset.height} px</span>
+            <div className="viewer-nav">
+              <button className="button viewer-button" ref={closeRef} onClick={closeViewer} aria-label="Close preview">Close</button>
+              <button className="button viewer-button" onClick={() => navigate(-1)} aria-label="Previous preset">← Previous</button>
+              <button className="button viewer-button" onClick={() => navigate(1)} aria-label="Next preset">Next →</button>
+            </div>
+            <div className="viewer-title">
+              <strong>{active.label}</strong>
+              <span>{activePreset.width} × {activePreset.height} px</span>
+            </div>
           </header>
 
           <nav aria-label="Preview quality" className="viewer-controls">
-            <button aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>Quick preview (15%)</button>
-            <button aria-pressed={mode === "full"} onClick={() => { setMode("full"); void requestFull(active.id); }}>Full resolution</button>
-            <button aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active.id); }}>Compare side by side</button>
+            <button className="button viewer-button" aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>Quick preview · 15%</button>
+            <button className="button viewer-button" aria-pressed={mode === "full"} onClick={() => { setMode("full"); void requestFull(active.id); }}>Full resolution</button>
+            <button className="button viewer-button" aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active.id); }}>Compare side by side</button>
           </nav>
 
           {viewerError && <p role="alert" className="viewer-error">{viewerError}</p>}
-          <div className={`viewer-stage ${mode === "compare" ? "viewer-stage--compare" : "viewer-stage--single"}`}>
+          <div className={`viewer-stage${mode === "compare" ? " is-compare" : " is-single"}`}>
             {(mode === "quick" || mode === "compare") && (
               <figure className="viewer-panel">
                 <figcaption>Quick preview · 15% scale</figcaption>
@@ -428,48 +719,29 @@ export default function Home() {
                   ? <img src={fullImages[active.id]} alt={`${active.label}, full-resolution rendered PNG`} />
                   : <div className="viewer-loading" aria-live="polite">
                       {loadingFullId === active.id
-                        ? "Rendering full-resolution wallpaper…"
-                        : <button onClick={() => void requestFull(active.id)}>Render full-resolution preview</button>}
+                        ? <><span className="spinner" aria-hidden="true" />Rendering full-resolution wallpaper…</>
+                        : <button className="button viewer-button" onClick={() => void requestFull(active.id)}>Render full-resolution preview</button>}
                     </div>}
               </figure>
             )}
           </div>
 
-          <div aria-label="Choose preset" className="viewer-strip">
+          <div role="group" aria-label="Choose preset" className="viewer-strip">
             {previews.map((preview) => (
               <button
+                className="viewer-thumb"
                 key={preview.id}
                 onClick={() => selectPreset(preview.id)}
                 aria-current={preview.id === active.id ? "true" : undefined}
                 aria-label={`View ${preview.label}`}
               >
                 <img src={preview.data} alt="" />
+                <span>{preview.platform}</span>
               </button>
             ))}
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        .viewer-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .viewer-controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-        .viewer-error { color: #ff8585; margin: 0 0 8px; }
-        .viewer-stage { flex: 1; min-height: 0; }
-        .viewer-stage--single { display: flex; justify-content: center; align-items: center; overflow: auto; }
-        .viewer-stage--compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 12px; overflow: auto; }
-        .viewer-panel { margin: 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        .viewer-panel img { max-width: 100%; max-height: calc(100% - 24px); object-fit: contain; }
-        .viewer-loading { padding: 24px; }
-        .viewer-strip { display: flex; gap: 8px; overflow-x: auto; padding-top: 12px; }
-        .viewer-strip button { flex: 0 0 76px; padding: 3px; border: 1px solid #888; background: #222; }
-        .viewer-strip button[aria-current="true"] { border: 2px solid white; }
-        .viewer-strip img { display: block; width: 100%; }
-        @media (max-width: 680px) {
-          .viewer-header { gap: 6px; }
-          .viewer-stage--compare { grid-template-columns: minmax(0, 1fr); align-content: start; }
-          .viewer-stage--compare .viewer-panel img { max-height: 34vh; }
-        }
-      `}</style>
-    </main>
+    </>
   );
 }
