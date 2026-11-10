@@ -264,6 +264,23 @@ button {
   letter-spacing: -0.015em;
 }
 
+.brand-logo {
+  display: block;
+  width: clamp(7.25rem, 14vw, 9rem);
+  padding: 0.35rem 0.4rem;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.16);
+}
+
+.brand-logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .hero-content {
   max-width: 54rem;
   padding: 0 1.25rem;

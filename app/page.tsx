@@ -573,7 +573,9 @@ export default function Home() {
             ))}
           </div>
           <div className="hero-scrim" aria-hidden="true" />
-          <span className="brand">Albumwall</span>
+          <span className="brand brand-logo">
+            <img src="/albumwall-logo.png" alt="Albumwall — Since 2026" width="302" height="251" />
+          </span>
           <ThemeToggle theme={theme} onToggle={toggleTheme} hero />
           <div className="hero-content" ref={heroContentRef}>
             <h1>Your album art,<br />on every screen.</h1>
