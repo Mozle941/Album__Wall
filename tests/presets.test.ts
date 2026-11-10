@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS, getPreset, presetsFor } from "../src/presets";
+import { dimensionsForRatio, PRESETS, getPreset, presetsFor } from "../src/presets";
 
 describe("presets", () => {
   it("has unique ids and positive integer sizes", () => {
@@ -26,5 +26,12 @@ describe("presets", () => {
   it("throws on unknown preset id", () => {
     expect(() => getPreset("nope")).toThrow("Unknown preset: nope");
     expect(getPreset("windows-4k").width).toBe(3840);
+  });
+
+  it("keeps device dimensions by default and preserves the long edge for chosen ratios", () => {
+    expect(dimensionsForRatio(1170, 2532, "device")).toEqual({ width: 1170, height: 2532 });
+    expect(dimensionsForRatio(1170, 2532, "9:16")).toEqual({ width: 1424, height: 2532 });
+    expect(dimensionsForRatio(1920, 1080, "1:1")).toEqual({ width: 1920, height: 1920 });
+    expect(dimensionsForRatio(3024, 1964, "4:5")).toEqual({ width: 3024, height: 3780 });
   });
 });

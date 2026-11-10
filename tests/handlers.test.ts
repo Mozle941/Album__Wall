@@ -24,6 +24,7 @@ describe("private Blob upload and processing", () => {
     expect((await handleUploadUrl(make({ contentType: "image/png", platforms: "ios", rights: false }))).status).toBe(400);
     expect((await handleUploadUrl(make({ contentType: "image/gif", platforms: "ios", rights: true }))).status).toBe(415);
     expect((await handleUploadUrl(make({ contentType: "image/png", platforms: "beos", rights: true }))).status).toBe(400);
+    expect((await handleUploadUrl(make({ contentType: "image/png", platforms: "ios", rights: true, aspectRatio: "3:2" }))).status).toBe(400);
     expect((await handlePreview(body("https://evil.test/x.png"))).status).toBe(400);
     expect(blob.get).not.toHaveBeenCalled();
   });
@@ -36,6 +37,16 @@ describe("private Blob upload and processing", () => {
     expect(res.status).toBe(200); expect(res.headers.get("content-type")).toBe("image/png"); expect(res.body).toBeTruthy();
     expect(await sharp(Buffer.from(await res.arrayBuffer())).metadata()).toMatchObject({ width: 1170, height: 2532, format: "png" });
     expect(blob.get).toHaveBeenCalledWith(path, { access: "private" }); expect(blob.del).toHaveBeenCalledWith(path, { ifMatch: '"etag"' });
+  });
+  it("uses a selected aspect ratio for preview and full-resolution output", async () => {
+    await mockBlob();
+    const previewResponse = await handlePreview(body(path, { aspectRatio: "9:16" }));
+    expect(previewResponse.status).toBe(200);
+    expect((await previewResponse.json()).previews[0]).toMatchObject({ width: 1424, height: 2532 });
+    await mockBlob();
+    const fullResponse = await handleFullPreview(body(path, { presetId: "ios-iphone-13", aspectRatio: "9:16" }));
+    expect(fullResponse.status).toBe(200);
+    expect(await sharp(Buffer.from(await fullResponse.arrayBuffer())).metadata()).toMatchObject({ width: 1424, height: 2532, format: "png" });
   });
   it("rejects malformed JSON values without treating them as metadata objects", async () => {
     for (const value of ["null", "[]", "false", "42", "\"text\"", "{"]) {

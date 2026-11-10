@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PLATFORMS, PRESETS, type Platform } from "../src/presets";
+import { ASPECT_RATIOS, PLATFORMS, PRESETS, type AspectRatio, type Platform } from "../src/presets";
 
 type Layout = "blur" | "solid";
-type Preview = { id: string; platform: Platform; label: string; data: string };
+type Preview = { id: string; platform: Platform; label: string; width: number; height: number; data: string };
 type ViewMode = "quick" | "full" | "compare";
 type Theme = "light" | "dark";
 
@@ -122,6 +122,7 @@ export default function Home() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [layout, setLayout] = useState<Layout>("blur");
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("device");
   const [rights, setRights] = useState(false);
   const [credits, setCredits] = useState("");
   const [previews, setPreviews] = useState<Preview[]>([]);
@@ -243,7 +244,7 @@ export default function Home() {
   }
 
   function metadata(pathname: string) {
-    return { pathname, platforms: platforms.join(","), layout, rights, credits };
+    return { pathname, platforms: platforms.join(","), layout, aspectRatio, rights, credits };
   }
 
   function releaseArtworkUrl() {
@@ -718,6 +719,21 @@ export default function Home() {
                     </select>
                   </label>
                   <label className="field">
+                    <span>Wallpaper aspect ratio</span>
+                    <select
+                      value={aspectRatio}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setAspectRatio(event.target.value as AspectRatio);
+                        invalidate();
+                      }}
+                    >
+                      {ASPECT_RATIOS.map((ratio) => (
+                        <option value={ratio} key={ratio}>{ratio === "device" ? "Device default" : ratio}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
                     <span>Optional attribution / credit</span>
                     <input
                       type="text"
@@ -738,7 +754,7 @@ export default function Home() {
                   <div>
                     <h2 className="step-title" id="step-preview"><span className="step-number">4</span>Preview</h2>
                     <p className="privacy-copy" role="status">
-                      Preview ready for {previews.length} wallpapers. Select any image to inspect its quick preview or compare it with a native-resolution render.
+                      Preview ready for {previews.length} wallpapers. Open any image for a full-resolution view, or compare it with the quick preview.
                     </p>
                   </div>
                 </div>
@@ -746,14 +762,15 @@ export default function Home() {
                   {previews.map((preview) => {
                     const preset = PRESETS.find((item) => item.id === preview.id);
                     return (
-                      <figure className={`preview-card${preset && preset.width > preset.height ? " is-wide" : ""}`} key={preview.id}>
+                      <figure className={`preview-card${preview.width > preview.height ? " is-wide" : ""}`} key={preview.id}>
                         <button
                           className="preview-open"
                           onClick={(event) => {
                             openerRef.current = event.currentTarget;
                             setActiveId(preview.id);
-                            setMode("quick");
+                            setMode("full");
                             setViewerError("");
+                            void requestFull(preview.id);
                           }}
                           aria-haspopup="dialog"
                           aria-label={`Open full-screen comparison preview: ${preview.label}`}
@@ -761,7 +778,7 @@ export default function Home() {
                           <img src={preview.data} alt={preview.label} />
                           <span className="inspect-badge">Inspect ↗</span>
                         </button>
-                        <figcaption>{preview.label}</figcaption>
+                        <figcaption>{preview.label} · {preview.width} × {preview.height} px</figcaption>
                       </figure>
                     );
                   })}
@@ -805,12 +822,12 @@ export default function Home() {
             </div>
             <div className="viewer-title">
               <strong>{active.label}</strong>
-              <span>{activePreset.width} × {activePreset.height} px</span>
+                      <span>{active.width} × {active.height} px</span>
             </div>
           </header>
 
           <nav aria-label="Preview quality" className="viewer-controls">
-            <button className="button viewer-button" aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>Quick preview · 15%</button>
+            <button className="button viewer-button" aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>Quick preview</button>
             <button className="button viewer-button" aria-pressed={mode === "full"} onClick={() => { setMode("full"); void requestFull(active.id); }}>Full resolution</button>
             <button className="button viewer-button" aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active.id); }}>Compare side by side</button>
           </nav>
@@ -825,7 +842,7 @@ export default function Home() {
             )}
             {(mode === "full" || mode === "compare") && (
               <figure className="viewer-panel">
-                <figcaption>Full resolution · {activePreset.width} × {activePreset.height} px</figcaption>
+                <figcaption>Full resolution · {active.width} × {active.height} px</figcaption>
                 {fullImages[active.id]
                   ? <img src={fullImages[active.id]} alt={`${active.label}, full-resolution rendered PNG`} />
                   : <div className="viewer-loading" aria-live="polite">

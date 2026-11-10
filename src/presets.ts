@@ -1,6 +1,18 @@
 export const PLATFORMS = ["android", "ios", "mac", "windows", "linux"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+export const ASPECT_RATIOS = ["device", "1:1", "4:5", "9:16", "16:9"] as const;
+export type AspectRatio = (typeof ASPECT_RATIOS)[number];
+
+export function dimensionsForRatio(width: number, height: number, ratio: AspectRatio): { width: number; height: number } {
+  if (ratio === "device") return { width, height };
+  const [ratioWidth, ratioHeight] = ratio.split(":").map(Number);
+  if (width >= height) {
+    return { width, height: Math.round(width * ratioHeight / ratioWidth) };
+  }
+  return { width: Math.round(height * ratioWidth / ratioHeight), height };
+}
+
 export interface Preset {
   id: string;
   platform: Platform;
