@@ -1,7 +1,7 @@
 # Albumwall
 Create device wallpapers for Android, iOS, macOS, Windows and Linux from an image you own or are licensed to use.
 
-**Current live production preview:** [albumwall-lemon.vercel.app](https://albumwall-lemon.vercel.app)
+**Current live production preview (batch progress + ETA):** [albumwall-lemon.vercel.app](https://albumwall-lemon.vercel.app)
 
 Albumwall does not connect to Spotify or fetch artwork from an external catalog.
 

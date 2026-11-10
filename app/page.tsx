@@ -6,6 +6,7 @@ import { ASPECT_RATIOS, PLATFORMS, PRESETS, type AspectRatio, type Platform } fr
 type Artwork = { id: string; file: File; url: string };
 type Preview = { id: string; presetId: string; imageId: string; imageName: string; originalUrl: string; platform: Platform; label: string; width: number; height: number; data: string };
 type PreparedDownload = { id: string; imageName: string; url: string; filename: string };
+type BatchProgress = { kind: "Preview" | "ZIP"; completed: number; total: number; imageName: string; phase: string; fraction: number; startedAt: number };
 type ViewMode = "quick" | "full" | "compare";
 type Theme = "light" | "dark";
 
@@ -118,6 +119,13 @@ function platformName(platform: Platform) {
   return platform.charAt(0).toUpperCase() + platform.slice(1);
 }
 
+function formatDuration(seconds: number) {
+  if (seconds < 60) return `about ${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder ? `about ${minutes}m ${remainder}s` : `about ${minutes}m`;
+}
+
 export default function Home() {
   const [theme, setTheme] = useState<Theme | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -135,7 +143,8 @@ export default function Home() {
   const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [showActionBar, setShowActionBar] = useState(false);
-  const [batchProgress, setBatchProgress] = useState("");
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [progressClock, setProgressClock] = useState(Date.now());
   const [preparedDownloads, setPreparedDownloads] = useState<PreparedDownload[]>([]);
 
   const heroRef = useRef<HTMLElement>(null);
@@ -202,6 +211,12 @@ export default function Home() {
   const activePreset = active ? PRESETS.find((preset) => preset.id === active.presetId) : undefined;
   const selected = PRESETS.filter((preset) => platforms.includes(preset.platform));
   const canGenerate = artworks.length > 0 && platforms.length > 0 && rights && !busy;
+  const progressRatio = batchProgress
+    ? Math.min(1, (batchProgress.completed + batchProgress.fraction) / batchProgress.total)
+    : 0;
+  const remainingSeconds = batchProgress && progressRatio > 0.02
+    ? Math.max(0, Math.ceil(((progressClock - batchProgress.startedAt) / 1000 / progressRatio) * (1 - progressRatio)))
+    : null;
   const actionReason = busy
     ? "Preparing your wallpapers…"
     : artworks.length === 0
@@ -293,6 +308,7 @@ export default function Home() {
 
   async function upload(image: File, signal?: AbortSignal): Promise<string> {
     if (image.size > MAX_IMAGE_SIZE) throw new Error(`${image.name}: image exceeds the 10 MiB upload limit`);
+    setBatchProgress((current) => current ? { ...current, phase: "Preparing upload", fraction: current.completed / current.total } : current);
     const signed = await fetch("/api/upload-url", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -301,6 +317,7 @@ export default function Home() {
     });
     const signedBody = await signed.json();
     if (!signed.ok) throw new Error(signedBody.error ?? "Could not prepare private upload");
+    setBatchProgress((current) => current ? { ...current, phase: "Uploading image", fraction: (current.completed + 0.12) / current.total } : current);
     const put = await fetch(signedBody.url, {
       method: "PUT",
       headers: { "content-type": image.type },
@@ -308,6 +325,7 @@ export default function Home() {
       signal,
     });
     if (!put.ok) throw new Error("Private image upload failed");
+    setBatchProgress((current) => current ? { ...current, phase: "Image uploaded", fraction: (current.completed + 0.52) / current.total } : current);
     return signedBody.pathname;
   }
 
@@ -321,10 +339,12 @@ export default function Home() {
     setBusy(true);
     try {
       const batchPreviews: Preview[] = [];
+      const startedAt = Date.now();
       for (const [index, artwork] of artworks.entries()) {
         if (controller.signal.aborted) return;
-        setBatchProgress(`Preparing image ${index + 1} of ${artworks.length}…`);
+        setBatchProgress({ kind: "Preview", completed: index, total: artworks.length, imageName: artwork.file.name, phase: "Starting", fraction: index / artworks.length, startedAt });
         const pathname = await upload(artwork.file, controller.signal);
+        setBatchProgress((current) => current ? { ...current, phase: "Upscaling and creating previews", fraction: (index + 0.68) / artworks.length } : current);
         const response = await fetch("/api/preview", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -333,6 +353,7 @@ export default function Home() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(`${artwork.file.name}: ${result.error ?? "Preview failed"}`);
+        setBatchProgress((current) => current ? { ...current, completed: index + 1, fraction: 0, phase: "Image complete" } : current);
         batchPreviews.push(...result.previews.map((item: Omit<Preview, "id" | "imageId" | "imageName" | "originalUrl" | "presetId"> & { id: string }) => ({
           ...item,
           id: `${artwork.id}:${item.id}`,
@@ -350,7 +371,7 @@ export default function Home() {
     } finally {
       if (requestId === previewRequestId.current) {
         previewController.current = null;
-        setBatchProgress("");
+        setBatchProgress(null);
         setBusy(false);
       }
     }
@@ -364,9 +385,11 @@ export default function Home() {
     setPreparedDownloads([]);
     try {
       const ready: PreparedDownload[] = [];
+      const startedAt = Date.now();
       for (const [index, artwork] of artworks.entries()) {
-        setBatchProgress(`Preparing ZIP ${index + 1} of ${artworks.length}…`);
+        setBatchProgress({ kind: "ZIP", completed: index, total: artworks.length, imageName: artwork.file.name, phase: "Starting", fraction: index / artworks.length, startedAt });
         const pathname = await upload(artwork.file);
+        setBatchProgress((current) => current ? { ...current, phase: "Upscaling and building ZIP", fraction: (index + 0.68) / artworks.length } : current);
         const response = await fetch("/api/zip", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -381,6 +404,7 @@ export default function Home() {
         downloadUrls.current.add(url);
         const baseName = artwork.file.name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "-") || "albumwall";
         ready.push({ id: artwork.id, imageName: artwork.file.name, url, filename: `${index + 1}-${baseName}.zip` });
+        setBatchProgress((current) => current ? { ...current, completed: index + 1, fraction: 0, phase: "Image complete" } : current);
       }
       setPreparedDownloads(ready);
     } catch (cause) {
@@ -388,7 +412,7 @@ export default function Home() {
       downloadUrls.current.clear();
       setError(cause instanceof Error ? cause.message : "Download failed");
     } finally {
-      setBatchProgress("");
+      setBatchProgress(null);
       setBusy(false);
     }
   }
@@ -532,6 +556,12 @@ export default function Home() {
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
+
+  useEffect(() => {
+    if (!busy || !batchProgress) return;
+    const timer = window.setInterval(() => setProgressClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [busy, batchProgress !== null]);
 
   useEffect(() => {
     if (!active) {
@@ -825,7 +855,29 @@ export default function Home() {
 
         <div className={`action-bar${showActionBar ? " is-visible" : ""}`}>
           <div className="action-bar-inner">
-            <span className="action-reason" id="action-status" aria-live="polite">{batchProgress || actionReason}</span>
+            <div className="action-status-block">
+              <span className="action-reason" id="action-status" aria-live="polite">
+                {batchProgress
+                  ? `${batchProgress.kind}: image ${Math.min(batchProgress.completed + 1, batchProgress.total)} of ${batchProgress.total} · ${batchProgress.imageName} · ${batchProgress.phase}`
+                  : actionReason}
+              </span>
+              {batchProgress && (
+                <div className="batch-progress-row">
+                  <div
+                    className="batch-progress-track"
+                    role="progressbar"
+                    aria-label={`${batchProgress.kind} batch progress`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(progressRatio * 100)}
+                  >
+                    <span className="batch-progress-fill" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
+                  </div>
+                  <span className="batch-progress-percent">{Math.round(progressRatio * 100)}%</span>
+                  <span className="batch-progress-eta">{remainingSeconds === null ? "Estimating time…" : `${formatDuration(remainingSeconds)} remaining`}</span>
+                </div>
+              )}
+            </div>
             <button className="button preview-action" type="button" onClick={() => void preview()} disabled={!canGenerate} aria-describedby="action-status">
               {busy ? <><span className="spinner" aria-hidden="true" />Preparing…</> : `Preview ${artworks.length} image${artworks.length === 1 ? "" : "s"}`}
             </button>

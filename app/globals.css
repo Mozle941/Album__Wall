@@ -1017,6 +1017,50 @@ button {
   font-size: 0.94rem;
 }
 
+.action-status-block {
+  display: grid;
+  min-width: 12rem;
+  flex: 1 1 22rem;
+  gap: 0.35rem;
+}
+
+.batch-progress-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-progress-track {
+  height: 0.48rem;
+  min-width: 4rem;
+  flex: 1 1 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.batch-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 350ms ease;
+}
+
+.batch-progress-percent {
+  min-width: 2.4rem;
+  color: var(--text);
+  text-align: right;
+}
+
+.batch-progress-eta {
+  flex: 0 0 auto;
+}
+
 .preview-action {
   flex: 0 0 auto;
 }
