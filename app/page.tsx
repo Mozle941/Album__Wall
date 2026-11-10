@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { ASPECT_RATIOS, PLATFORMS, PRESETS, type AspectRatio, type Platform } from "../src/presets";
 
-type Preview = { id: string; platform: Platform; label: string; width: number; height: number; data: string };
+type Artwork = { id: string; file: File; url: string };
+type Preview = { id: string; presetId: string; imageId: string; imageName: string; originalUrl: string; platform: Platform; label: string; width: number; height: number; data: string };
+type PreparedDownload = { id: string; imageName: string; url: string; filename: string };
 type ViewMode = "quick" | "full" | "compare";
 type Theme = "light" | "dark";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_BATCH_IMAGES = 3;
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const THEME_STORAGE_KEY = "albumwall-theme";
 
@@ -117,8 +120,7 @@ function platformName(platform: Platform) {
 
 export default function Home() {
   const [theme, setTheme] = useState<Theme | null>(null);
-  const [image, setImage] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("device");
   const [rights, setRights] = useState(false);
@@ -133,6 +135,8 @@ export default function Home() {
   const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [showActionBar, setShowActionBar] = useState(false);
+  const [batchProgress, setBatchProgress] = useState("");
+  const [preparedDownloads, setPreparedDownloads] = useState<PreparedDownload[]>([]);
 
   const heroRef = useRef<HTMLElement>(null);
   const heroContentRef = useRef<HTMLDivElement>(null);
@@ -143,7 +147,6 @@ export default function Home() {
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
-  const artworkUrlRef = useRef<string | null>(null);
   const viewerWasOpen = useRef(false);
   const previousOverflow = useRef("");
   const manualThemeChoiceRef = useRef(false);
@@ -153,6 +156,8 @@ export default function Home() {
   const previewController = useRef<AbortController | null>(null);
   const fullController = useRef<AbortController | null>(null);
   const objectUrls = useRef(new Set<string>());
+  const artworkUrls = useRef(new Set<string>());
+  const downloadUrls = useRef(new Set<string>());
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -194,20 +199,20 @@ export default function Home() {
 
   const activeIndex = previews.findIndex((preview) => preview.id === activeId);
   const active = activeIndex >= 0 ? previews[activeIndex] : undefined;
-  const activePreset = active ? PRESETS.find((preset) => preset.id === active.id) : undefined;
+  const activePreset = active ? PRESETS.find((preset) => preset.id === active.presetId) : undefined;
   const selected = PRESETS.filter((preset) => platforms.includes(preset.platform));
-  const canGenerate = !!image && platforms.length > 0 && rights && !busy;
+  const canGenerate = artworks.length > 0 && platforms.length > 0 && rights && !busy;
   const actionReason = busy
     ? "Preparing your wallpapers…"
-    : !image
+    : artworks.length === 0
       ? "Add an image to continue"
       : platforms.length === 0
         ? "Choose at least one platform"
         : !rights
           ? "Confirm you have permission to use this image"
           : previews.length > 0
-            ? `${previews.length} previews ready to inspect`
-            : `${selected.length} wallpaper sizes selected`;
+            ? `${previews.length} previews ready to inspect · ${artworks.length} images`
+            : `${selected.length} wallpaper sizes × ${artworks.length} images`;
 
   function cancelFullRequest() {
     fullRequestId.current++;
@@ -239,54 +244,55 @@ export default function Home() {
     setMode("quick");
     setError("");
     setViewerError("");
+    downloadUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    downloadUrls.current.clear();
+    setPreparedDownloads([]);
   }
 
   function metadata(pathname: string) {
     return { pathname, platforms: platforms.join(","), aspectRatio, rights, credits };
   }
 
-  function releaseArtworkUrl() {
-    if (artworkUrlRef.current) URL.revokeObjectURL(artworkUrlRef.current);
-    artworkUrlRef.current = null;
-    setImagePreviewUrl(null);
-  }
-
-  function chooseArtwork(file: File | null) {
-    if (!file || busy) return;
-    invalidate();
+  function chooseArtwork(fileList: FileList | File[] | null) {
+    const files = fileList ? Array.from(fileList) : [];
+    if (!files.length || busy) return;
     setError("");
-
-    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
-      releaseArtworkUrl();
-      setImage(null);
-      setError("Choose a PNG, JPEG, or WebP image.");
+    if (artworks.length + files.length > MAX_BATCH_IMAGES) {
+      setError(`Choose up to ${MAX_BATCH_IMAGES} images per batch.`);
       return;
     }
-
-    if (file.size > MAX_IMAGE_SIZE) {
-      releaseArtworkUrl();
-      setImage(null);
-      setError("Image exceeds the 10 MiB upload limit.");
+    const invalidType = files.find((file) => !ACCEPTED_IMAGE_TYPES.has(file.type));
+    if (invalidType) {
+      setError(`${invalidType.name}: choose a PNG, JPEG, or WebP image.`);
       return;
     }
-
-    releaseArtworkUrl();
-    const localUrl = URL.createObjectURL(file);
-    artworkUrlRef.current = localUrl;
-    setImagePreviewUrl(localUrl);
-    setImage(file);
+    const tooLarge = files.find((file) => file.size > MAX_IMAGE_SIZE);
+    if (tooLarge) {
+      setError(`${tooLarge.name}: image exceeds the 10 MiB per-image limit.`);
+      return;
+    }
+    invalidate();
+    const additions = files.map((file) => {
+      const url = URL.createObjectURL(file);
+      artworkUrls.current.add(url);
+      return { id: crypto.randomUUID(), file, url };
+    });
+    setArtworks((current) => [...current, ...additions]);
   }
 
-  function removeArtwork() {
-    releaseArtworkUrl();
-    setImage(null);
+  function removeArtwork(id: string) {
+    const artwork = artworks.find((item) => item.id === id);
+    if (artwork) {
+      URL.revokeObjectURL(artwork.url);
+      artworkUrls.current.delete(artwork.url);
+    }
+    setArtworks((current) => current.filter((item) => item.id !== id));
     invalidate();
     setError("");
   }
 
-  async function upload(signal?: AbortSignal): Promise<string> {
-    if (!image) throw new Error("Select an image first");
-    if (image.size > MAX_IMAGE_SIZE) throw new Error("Image exceeds the 10 MiB upload limit");
+  async function upload(image: File, signal?: AbortSignal): Promise<string> {
+    if (image.size > MAX_IMAGE_SIZE) throw new Error(`${image.name}: image exceeds the 10 MiB upload limit`);
     const signed = await fetch("/api/upload-url", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -314,18 +320,29 @@ export default function Home() {
     previewController.current = controller;
     setBusy(true);
     try {
-      const pathname = await upload(controller.signal);
-      const response = await fetch("/api/preview", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(metadata(pathname)),
-        signal: controller.signal,
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Preview failed");
-      if (generation === previewGeneration.current && !controller.signal.aborted) {
-        setPreviews(result.previews);
+      const batchPreviews: Preview[] = [];
+      for (const [index, artwork] of artworks.entries()) {
+        if (controller.signal.aborted) return;
+        setBatchProgress(`Preparing image ${index + 1} of ${artworks.length}…`);
+        const pathname = await upload(artwork.file, controller.signal);
+        const response = await fetch("/api/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(metadata(pathname)),
+          signal: controller.signal,
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(`${artwork.file.name}: ${result.error ?? "Preview failed"}`);
+        batchPreviews.push(...result.previews.map((item: Omit<Preview, "id" | "imageId" | "imageName" | "originalUrl" | "presetId"> & { id: string }) => ({
+          ...item,
+          id: `${artwork.id}:${item.id}`,
+          presetId: item.id,
+          imageId: artwork.id,
+          imageName: artwork.file.name,
+          originalUrl: artwork.url,
+        })));
       }
+      if (generation === previewGeneration.current && !controller.signal.aborted) setPreviews(batchPreviews);
     } catch (cause) {
       if (!controller.signal.aborted && generation === previewGeneration.current) {
         setError(cause instanceof Error ? cause.message : "Preview failed");
@@ -333,6 +350,7 @@ export default function Home() {
     } finally {
       if (requestId === previewRequestId.current) {
         previewController.current = null;
+        setBatchProgress("");
         setBusy(false);
       }
     }
@@ -341,42 +359,54 @@ export default function Home() {
   async function download() {
     setError("");
     setBusy(true);
+    downloadUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    downloadUrls.current.clear();
+    setPreparedDownloads([]);
     try {
-      const pathname = await upload();
-      const response = await fetch("/api/zip", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(metadata(pathname)),
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error ?? "Download failed");
+      const ready: PreparedDownload[] = [];
+      for (const [index, artwork] of artworks.entries()) {
+        setBatchProgress(`Preparing ZIP ${index + 1} of ${artworks.length}…`);
+        const pathname = await upload(artwork.file);
+        const response = await fetch("/api/zip", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(metadata(pathname)),
+        });
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(`${artwork.file.name}: ${result.error ?? "Download failed"}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        downloadUrls.current.add(url);
+        const baseName = artwork.file.name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "-") || "albumwall";
+        ready.push({ id: artwork.id, imageName: artwork.file.name, url, filename: `${index + 1}-${baseName}.zip` });
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "albumwall.zip";
-      anchor.click();
-      URL.revokeObjectURL(url);
+      setPreparedDownloads(ready);
     } catch (cause) {
+      downloadUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      downloadUrls.current.clear();
       setError(cause instanceof Error ? cause.message : "Download failed");
     } finally {
+      setBatchProgress("");
       setBusy(false);
     }
   }
 
-  async function requestFull(presetId: string) {
-    if (fullImages[presetId] || loadingFullId === presetId) return;
+  async function requestFull(preview: Preview) {
+    const { id, presetId, imageId } = preview;
+    if (fullImages[id] || loadingFullId === id) return;
     if (fullController.current) cancelFullRequest();
     const generation = previewGeneration.current;
     const requestId = ++fullRequestId.current;
     const controller = new AbortController();
     fullController.current = controller;
     setViewerError("");
-    setLoadingFullId(presetId);
+    setLoadingFullId(id);
     try {
-      const pathname = await upload(controller.signal);
+      const artwork = artworks.find((item) => item.id === imageId);
+      if (!artwork) throw new Error("The original image is no longer available");
+      const pathname = await upload(artwork.file, controller.signal);
       const response = await fetch("/api/full-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -392,13 +422,13 @@ export default function Home() {
         controller.signal.aborted ||
         requestId !== fullRequestId.current ||
         generation !== previewGeneration.current ||
-        !previews.some((preview) => preview.id === presetId)
+        !previews.some((item) => item.id === id)
       ) {
         URL.revokeObjectURL(url);
         return;
       }
       objectUrls.current.add(url);
-      setFullImages((current) => ({ ...current, [presetId]: url }));
+      setFullImages((current) => ({ ...current, [id]: url }));
     } catch (cause) {
       if (!controller.signal.aborted && requestId === fullRequestId.current) {
         setViewerError(cause instanceof Error ? cause.message : "Full-resolution preview failed");
@@ -558,8 +588,10 @@ export default function Home() {
     fullController.current?.abort();
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
     objectUrls.current.clear();
-    if (artworkUrlRef.current) URL.revokeObjectURL(artworkUrlRef.current);
-    artworkUrlRef.current = null;
+    artworkUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    artworkUrls.current.clear();
+    downloadUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    downloadUrls.current.clear();
   }, []);
 
   return (
@@ -588,9 +620,9 @@ export default function Home() {
 
         <main className="app-section" id="tool" ref={appRef}>
           <div
-            className={`app-art${imagePreviewUrl ? " on" : ""}`}
+            className={`app-art${artworks[0] ? " on" : ""}`}
             aria-hidden="true"
-            style={imagePreviewUrl ? { backgroundImage: `url("${imagePreviewUrl}")` } : undefined}
+            style={artworks[0] ? { backgroundImage: `url("${artworks[0].url}")` } : undefined}
           />
           <div className="app-veil" aria-hidden="true" />
           <div className="tool-shell">
@@ -607,50 +639,54 @@ export default function Home() {
 
             <section className="step" aria-labelledby="step-artwork">
               <h2 className="step-title" id="step-artwork"><span className="step-number">1</span>Artwork</h2>
-              {image ? (
-                <div className="file-chip">
-                  <span className="file-mark" aria-hidden="true">▧</span>
-                  <strong title={image.name}>{image.name}</strong>
-                  <span className="file-size">{image.size < 1024 * 1024 ? `${Math.max(1, Math.round(image.size / 1024))} KiB` : `${(image.size / (1024 * 1024)).toFixed(1)} MiB`}</span>
-                  <button className="button quiet-button" type="button" onClick={removeArtwork} disabled={busy}>Remove</button>
-                </div>
-              ) : (
-                <label
-                  className={`drop-zone${dragging ? " is-dragging" : ""}`}
-                  onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
-                  onDragOver={(event) => { event.preventDefault(); if (!dragging) setDragging(true); }}
-                  onDragLeave={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragging(false);
-                    chooseArtwork(event.dataTransfer.files[0] ?? null);
-                  }}
-                >
+              <label
+                className={`drop-zone${dragging ? " is-dragging" : ""}`}
+                onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+                onDragOver={(event) => { event.preventDefault(); if (!dragging) setDragging(true); }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  chooseArtwork(event.dataTransfer.files);
+                }}
+              >
                   <span className="upload-symbol" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" />
                       <path d="M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" />
                     </svg>
                   </span>
-                  <strong>Drop an image here or click to choose</strong>
-                  <small>PNG, JPEG, or WebP · max 10 MiB</small>
+                  <strong>{artworks.length ? "Drop more images or click to add" : "Drop images here or click to choose"}</strong>
+                  <small>PNG, JPEG, or WebP · up to {MAX_BATCH_IMAGES} images · max 10 MiB each</small>
                   <input
                     type="file"
+                    multiple
                     accept="image/png,image/jpeg,image/webp"
                     disabled={busy}
-                    aria-label="Artwork image (PNG, JPEG, or WebP; max 10 MiB)"
+                    aria-label={`Artwork images (PNG, JPEG, or WebP; up to ${MAX_BATCH_IMAGES}, max 10 MiB each)`}
                     onChange={(event) => {
-                      const file = event.currentTarget.files?.[0] ?? null;
+                      const files = Array.from(event.currentTarget.files ?? []);
                       event.currentTarget.value = "";
-                      chooseArtwork(file);
+                      chooseArtwork(files);
                     }}
                   />
-                </label>
+              </label>
+              {artworks.length > 0 && (
+                <div className="batch-file-list" aria-label="Selected images">
+                  {artworks.map((artwork) => (
+                    <div className="file-chip" key={artwork.id}>
+                      <span className="file-mark" aria-hidden="true">▧</span>
+                      <strong title={artwork.file.name}>{artwork.file.name}</strong>
+                      <span className="file-size">{artwork.file.size < 1024 * 1024 ? `${Math.max(1, Math.round(artwork.file.size / 1024))} KiB` : `${(artwork.file.size / (1024 * 1024)).toFixed(1)} MiB`}</span>
+                      <button className="button quiet-button" type="button" onClick={() => removeArtwork(artwork.id)} disabled={busy} aria-label={`Remove ${artwork.file.name}`}>Remove</button>
+                    </div>
+                  ))}
+                </div>
               )}
               <p className="privacy-copy">
-                Privacy: uploads go directly to a private Vercel Blob store. The temporary copy is deleted after each processing request; abandoned uploads are swept daily. Images are not publicly accessible or attached to end-user accounts.
+                Privacy: images upload one at a time to a private Vercel Blob store. Each temporary copy is deleted after processing; abandoned uploads are swept daily. Images are not publicly accessible or attached to end-user accounts.
               </p>
               <div className="live-message" aria-live="polite">
                 {error && <p className="message-error" role="alert">{error}</p>}
@@ -738,15 +774,13 @@ export default function Home() {
                 <div className="preview-heading">
                   <div>
                     <h2 className="step-title" id="step-preview"><span className="step-number">4</span>Preview</h2>
-              <p className="privacy-copy" role="status">
-                      Preview ready for {previews.length} wallpapers. Open any image for a full-resolution view, or compare the uploaded original with the resized wallpaper.
+                    <p className="privacy-copy" role="status">
+                      Preview ready for {previews.length} wallpapers from {artworks.length} images. Open any image for a full-resolution view, or compare its uploaded original with the resized wallpaper.
                     </p>
                   </div>
                 </div>
                 <div className="preview-grid">
-                  {previews.map((preview) => {
-                    const preset = PRESETS.find((item) => item.id === preview.id);
-                    return (
+                  {previews.map((preview) => (
                       <figure className={`preview-card${preview.width > preview.height ? " is-wide" : ""}`} key={preview.id}>
                         <button
                           className="preview-open"
@@ -755,34 +789,48 @@ export default function Home() {
                             setActiveId(preview.id);
                             setMode("full");
                             setViewerError("");
-                            void requestFull(preview.id);
+                            void requestFull(preview);
                           }}
                           aria-haspopup="dialog"
-                          aria-label={`Open full-screen comparison preview: ${preview.label}`}
+                          aria-label={`Open ${preview.imageName}, ${preview.label} full-screen comparison preview`}
                         >
                           <img src={preview.data} alt={preview.label} />
                           <span className="inspect-badge">Inspect ↗</span>
                         </button>
-                        <figcaption>{preview.label} · {preview.width} × {preview.height} px</figcaption>
+                        <figcaption>{preview.imageName} · {preview.label} · {preview.width} × {preview.height} px</figcaption>
                       </figure>
-                    );
-                  })}
+                  ))}
                 </div>
               </section>
             )}
 
-            <p className="tool-note">Choose artwork you own or are licensed to use. Your image is processed temporarily and is not made public.</p>
+            {preparedDownloads.length > 0 && (
+              <section className="step batch-downloads" aria-labelledby="batch-download-title">
+                <h2 className="step-title" id="batch-download-title">Your ZIP files are ready</h2>
+                <p className="privacy-copy">Each ZIP contains the selected platform sizes for one image. Choose a file to download it.</p>
+                <ul className="batch-download-list">
+                  {preparedDownloads.map((item) => (
+                    <li key={item.id}>
+                      <span title={item.imageName}>{item.imageName}</span>
+                      <a className="button quiet-button" href={item.url} download={item.filename}>Download ZIP</a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <p className="tool-note">Choose images you own or are licensed to use. They are processed temporarily and are not made public.</p>
           </div>
         </main>
 
         <div className={`action-bar${showActionBar ? " is-visible" : ""}`}>
           <div className="action-bar-inner">
-            <span className="action-reason" id="action-status" aria-live="polite">{actionReason}</span>
+            <span className="action-reason" id="action-status" aria-live="polite">{batchProgress || actionReason}</span>
             <button className="button preview-action" type="button" onClick={() => void preview()} disabled={!canGenerate} aria-describedby="action-status">
-              {busy ? <><span className="spinner" aria-hidden="true" />Preparing…</> : `Preview ${selected.length} wallpaper${selected.length === 1 ? "" : "s"}`}
+              {busy ? <><span className="spinner" aria-hidden="true" />Preparing…</> : `Preview ${artworks.length} image${artworks.length === 1 ? "" : "s"}`}
             </button>
             <button className="button primary-action" type="button" onClick={() => void download()} disabled={!canGenerate} aria-describedby="action-status">
-              Download ZIP
+              {artworks.length > 1 ? `Prepare ${artworks.length} ZIPs` : "Prepare ZIP"}
             </button>
           </div>
         </div>
@@ -813,8 +861,8 @@ export default function Home() {
 
           <nav aria-label="Preview quality" className="viewer-controls">
             <button className="button viewer-button" aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>Quick preview</button>
-            <button className="button viewer-button" aria-pressed={mode === "full"} onClick={() => { setMode("full"); void requestFull(active.id); }}>Full resolution</button>
-            <button className="button viewer-button" aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active.id); }}>Compare original with wallpaper</button>
+            <button className="button viewer-button" aria-pressed={mode === "full"} onClick={() => { setMode("full"); void requestFull(active); }}>Full resolution</button>
+            <button className="button viewer-button" aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active); }}>Compare original with wallpaper</button>
           </nav>
 
           {viewerError && <p role="alert" className="viewer-error">{viewerError}</p>}
@@ -825,21 +873,21 @@ export default function Home() {
                 <img src={active.data} alt={`${active.label}, quick 15% preview`} />
               </figure>
             )}
-            {mode === "compare" && imagePreviewUrl && (
+            {mode === "compare" && (
               <figure className="viewer-panel">
-                <figcaption>Uploaded original</figcaption>
-                <img src={imagePreviewUrl} alt="Original uploaded image, before resizing" />
+                <figcaption>Uploaded original · {active.imageName}</figcaption>
+                <img src={active.originalUrl} alt={`${active.imageName}, original uploaded image before resizing`} />
               </figure>
             )}
             {(mode === "full" || mode === "compare") && (
               <figure className="viewer-panel">
                 <figcaption>Resized wallpaper · {active.width} × {active.height} px</figcaption>
                 {fullImages[active.id]
-                  ? <img src={fullImages[active.id]} alt={`${active.label}, full-resolution rendered PNG`} />
+                  ? <img src={fullImages[active.id]} alt={`${active.imageName}, ${active.label}, full-resolution rendered PNG`} />
                   : <div className="viewer-loading" aria-live="polite">
                       {loadingFullId === active.id
                         ? <><span className="spinner" aria-hidden="true" />Rendering full-resolution wallpaper…</>
-                        : <button className="button viewer-button" onClick={() => void requestFull(active.id)}>Render full-resolution preview</button>}
+                        : <button className="button viewer-button" onClick={() => void requestFull(active)}>Render full-resolution preview</button>}
                     </div>}
               </figure>
             )}
@@ -852,10 +900,10 @@ export default function Home() {
                 key={preview.id}
                 onClick={() => selectPreset(preview.id)}
                 aria-current={preview.id === active.id ? "true" : undefined}
-                aria-label={`View ${preview.label}`}
+                aria-label={`View ${preview.imageName}, ${preview.label}`}
               >
                 <img src={preview.data} alt="" />
-                <span>{preview.platform}</span>
+                <span>{preview.imageName} · {preview.platform}</span>
               </button>
             ))}
           </div>
