@@ -988,7 +988,7 @@ Do before making the repo or site public.
 | Check | Action |
 |---|---|
 | Spotify Developer Terms and Design Guidelines on album art | Read them; adjust or add notices if they restrict altering art. Not verified in this plan |
-| Public hosting abuse | Anyone can call your endpoints. Add rate limiting (host-level or middleware) before sharing a public URL |
+| Public hosting abuse | Implemented: root Next.js `proxy.ts` applies shared Upstash Redis sliding-window limits to `/api/info` (20/min), `/api/wallpaper` (30/min), and `/api/zip` (3/min), with HMAC client keys and fail-closed behavior. Before public sharing, configure `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and `ALBUMWALL_RATE_LIMIT_HASH_SECRET`; configure the trusted reverse proxy to overwrite/sanitize `x-real-ip` or `x-forwarded-for`; then verify live Redis and proxy behavior. Not deployment-verified; do not claim public readiness yet. |
 | Compute cost | Zip rendering is CPU/memory heavy on a free tier; keep per-platform downloads |
 | Unofficial 640px URL | Confirm in the live check (Task 7 Step 2); note result in README |
 
@@ -996,7 +996,7 @@ Do before making the repo or site public.
 
 ## Self-review
 
-Plan deviation (user-requested CLI tests): totals are 28 tests across 7 files, rather than the original 25/6. Additional Task 8 local-equivalent checks (`npm ci`, `npm run typecheck`, `npm test`, `npm run build`) passed; Docker and GitHub execution were not verified.
+Plan deviation (user-requested CLI tests): baseline was 28 tests across 7 files, rather than the original 25/6. Task 9 adds 4 rate-limit tests in `tests/rate-limit.test.ts`, bringing the verified total to 32 tests across 8 files. `npm run typecheck`, `npm test`, and `npm run build` passed; build reports `ƒ Proxy (Middleware)` and the three dynamic API routes. Docker and GitHub execution were not verified.
 
 | Check | Result |
 |---|---|
@@ -1004,6 +1004,6 @@ Plan deviation (user-requested CLI tests): totals are 28 tests across 7 files, r
 | PWA on phone | Manifest and icons (Task 6); phone install not verified (Task 7 Step 4 NOT RUN). No service worker or offline mode: the app needs the server, so offline adds nothing |
 | Open-source ready | Task 8 |
 | Placeholders | None |
-| Verified here | Tasks 1–8 files: 28 tests pass across 7 files; `npm ci`, typecheck and `next build` pass; build emits `/`, `/api/info`, `/api/wallpaper`, `/api/zip`, `/manifest.webmanifest`. Live Spotify check verified; Task 7 offline routes/statuses passed (with standalone-mode warning). |
-| Not verified here | Phone install (Task 7 Step 4 NOT RUN: deployment/tunneling prohibited and no phone available), Docker build (NOT RUN: Docker CLI is not installed), GitHub Actions execution (not run; no push/deploy), rate limiting |
+| Verified here | Tasks 1–9 files: 32 tests passed across 8 files, including 4 injected-backend rate-limit tests; `npm run typecheck`, `npm test`, and `npm run build` pass. Next.js 16.4.6 build emits `/`, `/api/info`, `/api/wallpaper`, `/api/zip`, `/manifest.webmanifest`, and recognizes root Proxy. Live Spotify check verified; Task 7 offline routes/statuses passed (with standalone-mode warning). |
+| Not verified here | Phone install (Task 7 Step 4 NOT RUN: deployment/tunneling prohibited and no phone available), Docker build (NOT RUN: Docker CLI is not installed), GitHub Actions execution (not run; no push/deploy), production environment secrets, trusted-proxy sanitization, and live Upstash Redis behavior |
 | Type consistency | Names match across tasks; code was compiled |
