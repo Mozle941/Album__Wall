@@ -738,8 +738,8 @@ export default function Home() {
                 <div className="preview-heading">
                   <div>
                     <h2 className="step-title" id="step-preview"><span className="step-number">4</span>Preview</h2>
-                    <p className="privacy-copy" role="status">
-                      Preview ready for {previews.length} wallpapers. Open any image for a full-resolution view, or compare it with the quick preview.
+              <p className="privacy-copy" role="status">
+                      Preview ready for {previews.length} wallpapers. Open any image for a full-resolution view, or compare the uploaded original with the resized wallpaper.
                     </p>
                   </div>
                 </div>
@@ -814,20 +814,26 @@ export default function Home() {
           <nav aria-label="Preview quality" className="viewer-controls">
             <button className="button viewer-button" aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>Quick preview</button>
             <button className="button viewer-button" aria-pressed={mode === "full"} onClick={() => { setMode("full"); void requestFull(active.id); }}>Full resolution</button>
-            <button className="button viewer-button" aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active.id); }}>Compare side by side</button>
+            <button className="button viewer-button" aria-pressed={mode === "compare"} onClick={() => { setMode("compare"); void requestFull(active.id); }}>Compare original with wallpaper</button>
           </nav>
 
           {viewerError && <p role="alert" className="viewer-error">{viewerError}</p>}
           <div className={`viewer-stage${mode === "compare" ? " is-compare" : " is-single"}`}>
-            {(mode === "quick" || mode === "compare") && (
+            {mode === "quick" && (
               <figure className="viewer-panel">
                 <figcaption>Quick preview · 15% scale</figcaption>
                 <img src={active.data} alt={`${active.label}, quick 15% preview`} />
               </figure>
             )}
+            {mode === "compare" && imagePreviewUrl && (
+              <figure className="viewer-panel">
+                <figcaption>Uploaded original</figcaption>
+                <img src={imagePreviewUrl} alt="Original uploaded image, before resizing" />
+              </figure>
+            )}
             {(mode === "full" || mode === "compare") && (
               <figure className="viewer-panel">
-                <figcaption>Full resolution · {active.width} × {active.height} px</figcaption>
+                <figcaption>Resized wallpaper · {active.width} × {active.height} px</figcaption>
                 {fullImages[active.id]
                   ? <img src={fullImages[active.id]} alt={`${active.label}, full-resolution rendered PNG`} />
                   : <div className="viewer-loading" aria-live="polite">
