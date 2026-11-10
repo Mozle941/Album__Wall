@@ -3,20 +3,19 @@ import { parseArgs } from "node:util";
 import { generateAll } from "./generate";
 import { PLATFORMS, presetsFor, type Platform } from "./presets";
 import { foregroundSide, LAYOUTS, type Layout } from "./render";
-import { fetchArtwork } from "./spotify";
-import sharp from "sharp";
-const USAGE = `Usage: npm run cli -- <spotify-album-or-track-url> [options]
-       npm run cli -- --image ./cover.jpg [options]
+import { validateImage } from "./image-input";
+const USAGE = `Usage: npm run cli -- --image ./cover.jpg [options]
+Input image must be yours or licensed/otherwise permitted for your use; provide attribution when required.
 
 Options:
-  --platform  comma list of: ${PLATFORMS.join(",")} (default: all)
+  --platform  comma list of: ${PLATFORMS.join(",")} (required)
   --layout    ${LAYOUTS.join(" | ")} (default: blur)
   --out       output directory (default: out)
-  --image     local image instead of a Spotify URL`;
+  --image     local PNG, JPEG, or WebP file (required)`;
 
 async function main() {
   const { values, positionals } = parseArgs({
-    allowPositionals: true,
+    allowPositionals: false,
     options: {
       platform: { type: "string" },
       layout: { type: "string", default: "blur" },
@@ -25,31 +24,21 @@ async function main() {
     },
   });
 
-  const url = positionals[0];
-  if (!url && !values.image) {
+  if (positionals.length || !values.image) {
     console.error(USAGE);
     process.exit(1);
   }
 
   const platforms = values.platform?.split(",").map((s) => s.trim()) as Platform[] | undefined;
+  if (!platforms?.length || platforms.some((p) => !p)) throw new Error("Select at least one --platform");
   for (const p of platforms ?? []) {
     if (!PLATFORMS.includes(p)) throw new Error(`Unknown platform: ${p}`);
   }
   const layout = values.layout as Layout;
   if (!LAYOUTS.includes(layout)) throw new Error(`Unknown layout: ${layout}`);
 
-  let art: Buffer;
-  let artWidth: number;
-  if (values.image) {
-    art = await readFile(values.image);
-    artWidth = (await sharp(art).metadata()).width ?? 0;
-  } else {
-    const fetched = await fetchArtwork(url);
-    art = fetched.buffer;
-    artWidth = fetched.width;
-    console.log(`Artwork: ${fetched.width}x${fetched.height} from ${fetched.sourceUrl}`);
-  }
-
+  const art = await readFile(values.image);
+  const { width: artWidth } = await validateImage(art);
   const presets = presetsFor(platforms);
   for (const preset of presets) {
     const side = foregroundSide(preset);

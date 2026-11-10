@@ -1,42 +1,32 @@
 # Albumwall
-
-Turn Spotify album art into wallpapers for Android, iOS, macOS, Windows and Linux.
+Create device wallpapers for Android, iOS, macOS, Windows and Linux from an image you own or are licensed to use.
 
 ## Use
-
     npm install
     npm run dev          # website on http://localhost:3000
-    npm run cli -- "https://open.spotify.com/album/<id>" --platform ios,android
+    npm run cli -- --image ./cover.jpg --platform ios,android
 
-No Spotify account or API key needed. Album art comes from Spotify's public oEmbed endpoint.
+Accepted input is a single-frame PNG, JPEG, or WebP image, up to 10 MiB and 40 million decoded pixels. The website sends it to the Node.js server only for transient generation; it is not saved to disk or an account. The CLI requires a local image file. Users are responsible for having the rights needed to use their image and for providing any required attribution. Optional website attribution text is included in the downloaded ZIP as `CREDITS.txt`.
 
 ## API rate limits and production deployment
-
-The Node.js app protects `/api/info` (20 requests/minute), `/api/wallpaper` (30/minute), and `/api/zip` (3/minute) with shared Upstash Redis sliding-window limits. Set these environment variables on every production instance:
-
+The Node.js app protects `POST /api/preview` (10 requests/minute) and `POST /api/zip` (3 requests/minute) with shared Upstash Redis sliding-window limits. Set these environment variables on every production instance:
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 - `ALBUMWALL_RATE_LIMIT_HASH_SECRET` — a strong, randomly generated secret of at least 32 characters used to HMAC client IPs before they become Redis keys. Generate one with `openssl rand -hex 32` and store it in your deployment's secret manager; do not commit it.
 
-Production must run on a Node.js host with the root Next.js `proxy.ts` enabled. The deployment's trusted reverse proxy/load balancer must **overwrite or sanitize** `x-real-ip` and/or `x-forwarded-for` before forwarding requests. The app uses these platform-provided headers to identify clients; if neither is present, or required configuration or Redis is unavailable, requests fail closed with HTTP 503. Do not expose the app directly behind a proxy that passes through arbitrary client-supplied forwarding headers. These controls are implemented in code; configure the secrets and trusted proxy, and verify the live Redis connection and behavior on the chosen host before claiming production readiness.
-
-For local API development, set the same variables in `.env.local`; without them, API requests also fail closed with HTTP 503.
+Production must run on a Node.js host with the root Next.js `proxy.ts` enabled. Configure the reverse proxy/load balancer to enforce a request-body limit of at least 11 MiB (to allow multipart overhead) and close to the application's 10 MiB file limit, and to overwrite/sanitize `x-real-ip` and/or `x-forwarded-for`. If required configuration, trusted client IP, or Redis is unavailable, requests fail closed with HTTP 503. Do not expose the app directly behind a proxy that passes through arbitrary client-supplied forwarding headers. Verify live proxy/body-size/Redis behavior on the chosen host before claiming production readiness. For local API development, configure the same environment variables in `.env.local`.
 
 ## Known limits
-
-- Art is 640px at best (300px if Spotify's unofficial size URL stops working), so large wallpapers show it centered over a blurred background, not stretched.
-- Relies on undocumented/unguaranteed behaviour of Spotify's oEmbed and image CDN. It may break.
+- Large wallpapers upscale smaller source images; source quality determines output quality.
+- Animated and multipage images are not supported.
 
 ## Disclaimer
-
-Not affiliated with or endorsed by Spotify. Album art belongs to its rights holders. For personal use.
+Not affiliated with or endorsed by Spotify. Users are responsible for image rights and any required attribution. No assurance of personal-use rights is made.
 
 ## Development
-
     npm test
     npm run typecheck
     npm run build
 
 ## License
-
 MIT

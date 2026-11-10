@@ -10,5 +10,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/info", "/api/wallpaper", "/api/zip"],
+  matcher: ["/api/preview", "/api/zip"],
 };

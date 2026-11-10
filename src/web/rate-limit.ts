@@ -4,8 +4,7 @@ import { Redis } from "@upstash/redis";
 import { isIP } from "node:net";
 
 export const API_RATE_LIMITS = {
-  "/api/info": 20,
-  "/api/wallpaper": 30,
+  "/api/preview": 10,
   "/api/zip": 3,
 } as const;
 type ApiRoute = keyof typeof API_RATE_LIMITS;

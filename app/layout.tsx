@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "Albumwall",
-  description: "Turn Spotify album art into wallpapers for every device.",
+  description: "Create device wallpapers from artwork you own or are licensed to use.",
 };
 
 export const viewport: Viewport = { themeColor: "#121212" };

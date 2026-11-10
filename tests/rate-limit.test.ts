@@ -4,7 +4,7 @@ import { checkRateLimit, API_RATE_LIMITS, type RateLimitBackend } from "../src/w
 const savedEnv = { ...process.env };
 const headers = (values: Record<string, string> = {}) => new Headers(values);
 const backend = (overrides: Partial<RateLimitBackend> = {}): RateLimitBackend => ({
-  limit: vi.fn(async () => ({ success: true, limit: 20, remaining: 19, reset: 1_800_000_000_000 })),
+  limit: vi.fn(async () => ({ success: true, limit: 10, remaining: 9, reset: 1_800_000_000_000 })),
   ...overrides,
 });
 const env = {
@@ -21,15 +21,15 @@ afterEach(() => {
 describe("API rate limiting", () => {
   it("passes allowed requests and applies distinct per-route quotas", async () => {
     process.env = { ...process.env, ...env };
-    expect(API_RATE_LIMITS).toEqual({ "/api/info": 20, "/api/wallpaper": 30, "/api/zip": 3 });
+    expect(API_RATE_LIMITS).toEqual({ "/api/preview": 10, "/api/zip": 3 });
     const limiter = backend();
-    const result = await checkRateLimit(new Request("https://example.test/api/info", {
+    const result = await checkRateLimit(new Request("https://example.test/api/preview", {
       headers: headers({ "x-real-ip": "203.0.113.10" }),
     }), limiter);
     expect(result.status).toBe(200);
     expect(await result.text()).toBe("");
     expect(limiter.limit).toHaveBeenCalledOnce();
-    expect(vi.mocked(limiter.limit).mock.calls[0][1]).toBe(20);
+    expect(vi.mocked(limiter.limit).mock.calls[0][1]).toBe(10);
     expect(vi.mocked(limiter.limit).mock.calls[0][0]).not.toContain("203.0.113.10");
 
     for (const [route, quota] of Object.entries(API_RATE_LIMITS)) {
@@ -62,18 +62,18 @@ describe("API rate limiting", () => {
   it("fails closed for missing IP or required configuration without exposing details", async () => {
     process.env = { ...process.env, ...env };
     const limiter = backend();
-    const missingIp = await checkRateLimit(new Request("https://example.test/api/info"), limiter);
+    const missingIp = await checkRateLimit(new Request("https://example.test/api/preview"), limiter);
     expect(missingIp.status).toBe(503);
     expect(await missingIp.json()).toEqual({ error: "Rate limiting unavailable" });
     expect(limiter.limit).not.toHaveBeenCalled();
 
-    const invalidIp = await checkRateLimit(new Request("https://example.test/api/info", {
+    const invalidIp = await checkRateLimit(new Request("https://example.test/api/preview", {
       headers: headers({ "x-real-ip": "not-an-ip" }),
     }), limiter);
     expect(invalidIp.status).toBe(503);
 
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
-    const missingConfig = await checkRateLimit(new Request("https://example.test/api/info", {
+    const missingConfig = await checkRateLimit(new Request("https://example.test/api/preview", {
       headers: headers({ "x-real-ip": "203.0.113.10" }),
     }), limiter);
     expect(missingConfig.status).toBe(503);
@@ -81,7 +81,7 @@ describe("API rate limiting", () => {
     expect(limiter.limit).not.toHaveBeenCalled();
 
     process.env = { ...process.env, ...env, ALBUMWALL_RATE_LIMIT_HASH_SECRET: "too-short" };
-    const weakSecret = await checkRateLimit(new Request("https://example.test/api/info", {
+    const weakSecret = await checkRateLimit(new Request("https://example.test/api/preview", {
       headers: headers({ "x-real-ip": "203.0.113.10" }),
     }), limiter);
     expect(weakSecret.status).toBe(503);
@@ -90,7 +90,7 @@ describe("API rate limiting", () => {
   it("fails closed when the shared backend errors", async () => {
     process.env = { ...process.env, ...env };
     const limiter = backend({ limit: vi.fn(async () => { throw new Error("private backend detail"); }) });
-    const result = await checkRateLimit(new Request("https://example.test/api/wallpaper", {
+    const result = await checkRateLimit(new Request("https://example.test/api/preview", {
       headers: headers({ "x-real-ip": "203.0.113.10" }),
     }), limiter);
     expect(result.status).toBe(503);
