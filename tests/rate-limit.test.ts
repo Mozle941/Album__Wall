@@ -21,7 +21,7 @@ afterEach(() => {
 describe("API rate limiting", () => {
   it("passes allowed requests and applies distinct per-route quotas", async () => {
     process.env = { ...process.env, ...env };
-    expect(API_RATE_LIMITS).toEqual({ "/api/preview": 10, "/api/zip": 3 });
+    expect(API_RATE_LIMITS).toEqual({ "/api/upload-url": 10, "/api/preview": 10, "/api/full-preview": 3, "/api/zip": 3 });
     const limiter = backend();
     const result = await checkRateLimit(new Request("https://example.test/api/preview", {
       headers: headers({ "x-real-ip": "203.0.113.10" }),
@@ -40,6 +40,24 @@ describe("API rate limiting", () => {
       expect(response.status).toBe(200);
       expect(routeBackend.limit).toHaveBeenCalledWith(expect.any(String), quota, route);
     }
+  });
+
+  it("accepts Vercel Marketplace Redis environment variable names", async () => {
+    const limiter = backend();
+    const result = await checkRateLimit(
+      new Request("https://example.test/api/preview", {
+        headers: headers({ "x-real-ip": "203.0.113.12" }),
+      }),
+      limiter,
+      {
+        NODE_ENV: "test",
+        ALBUMWALL_RATE_LIMIT_HASH_SECRET: env.ALBUMWALL_RATE_LIMIT_HASH_SECRET,
+        KV_REST_API_URL: "https://redis.example.test",
+        KV_REST_API_TOKEN: "vercel-test-token",
+      },
+    );
+    expect(result.status).toBe(200);
+    expect(limiter.limit).toHaveBeenCalledOnce();
   });
 
   it("returns 429 with retry and standard rate headers on excess", async () => {

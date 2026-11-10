@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  output: "standalone",
+  // Vercel's adapter uses managed output; Docker builds still need standalone.
+  output: process.env.VERCEL ? undefined : "standalone",
   serverExternalPackages: ["sharp"],
 };
 

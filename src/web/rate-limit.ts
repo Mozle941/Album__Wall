@@ -4,7 +4,9 @@ import { Redis } from "@upstash/redis";
 import { isIP } from "node:net";
 
 export const API_RATE_LIMITS = {
+  "/api/upload-url": 10,
   "/api/preview": 10,
+  "/api/full-preview": 3,
   "/api/zip": 3,
 } as const;
 type ApiRoute = keyof typeof API_RATE_LIMITS;
@@ -22,6 +24,13 @@ export interface RateLimitBackend {
 const CONFIG_ERROR = () =>
   Response.json({ error: "Rate limiting unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
 
+function redisCredentials(env: NodeJS.ProcessEnv) {
+  return {
+    url: env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL,
+    token: env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN,
+  };
+}
+
 function getClientIp(headers: Headers): string | undefined {
   // The deployment reverse proxy must overwrite/sanitize these headers. Never accept
   // arbitrary client-supplied forwarding headers as trustworthy identity.
@@ -32,7 +41,7 @@ function getClientIp(headers: Headers): string | undefined {
 }
 
 function createUpstashBackend(): RateLimitBackend {
-  const redis = Redis.fromEnv();
+  const redis = new Redis(redisCredentials(process.env));
   const limiters = new Map<ApiRoute, Ratelimit>();
   for (const [route, quota] of Object.entries(API_RATE_LIMITS) as [ApiRoute, number][]) {
     limiters.set(route, new Ratelimit({
@@ -70,8 +79,7 @@ export async function checkRateLimit(
 
   const ip = getClientIp(request.headers);
   const secret = env.ALBUMWALL_RATE_LIMIT_HASH_SECRET;
-  const redisUrl = env.UPSTASH_REDIS_REST_URL;
-  const redisToken = env.UPSTASH_REDIS_REST_TOKEN;
+  const { url: redisUrl, token: redisToken } = redisCredentials(env);
   if (!ip || !secret || secret.length < 32 || !redisUrl || !redisToken) return CONFIG_ERROR();
 
   try {

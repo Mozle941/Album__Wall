@@ -1,8 +1,13 @@
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { del, get, issueSignedToken, list, presignUrl } from "@vercel/blob";
 import { buildZip } from "../bundle";
 import { validateImage, ImageInputError, MAX_IMAGE_BYTES } from "../image-input";
 import { PLATFORMS, presetsFor, type Platform } from "../presets";
 import { LAYOUTS, renderWallpaper, type Layout } from "../render";
 const PREVIEW_SCALE = 0.15;
+export const TEMP_PREFIX = "albumwall-temp/";
+const MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const UUID_PATH = /^albumwall-temp\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(png|jpe?g|webp)$/i;
 class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
 function json(body: unknown, status = 200): Response { return Response.json(body, { status, headers: { "cache-control": "no-store" } }); }
 async function guarded(fn: () => Promise<Response>): Promise<Response> {
@@ -11,48 +16,109 @@ async function guarded(fn: () => Promise<Response>): Promise<Response> {
     console.error(err); return json({ error: "Internal error" }, 500);
   }
 }
-async function readForm(req: Request) {
-  const length = Number(req.headers.get("content-length") ?? 0);
-  if (length > MAX_IMAGE_BYTES + 64 * 1024) throw new HttpError(413, "Request exceeds the 10 MiB image upload limit");
-  let form: FormData;
-  try { form = await req.formData(); } catch { throw new HttpError(400, "Expected multipart form data with an image file"); }
-  const value = form.get("image");
-  if (!(value instanceof File) || !value.size) throw new HttpError(400, "Select a non-empty image file");
-  if (value.size > MAX_IMAGE_BYTES) throw new HttpError(413, "Image exceeds the 10 MiB upload limit");
-  if (!["image/png", "image/jpeg", "image/webp"].includes(value.type)) throw new HttpError(415, "Upload a PNG, JPEG, or WebP image");
-  const bytes = Buffer.from(await value.arrayBuffer());
-  const imageMeta = await validateImage(bytes);
-  const expectedMime = imageMeta.format === "jpeg" ? "image/jpeg" : `image/${imageMeta.format}`;
-  if (value.type !== expectedMime) throw new HttpError(415, "Image contents do not match the declared PNG, JPEG, or WebP type");
-  const rights = form.get("rights");
-  if (rights !== "true") throw new HttpError(400, "Confirm that you own the image or have permission/a license allowing its use");
-  const raw = String(form.get("platforms") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+function fields(data: Record<string, unknown>) {
+  if (data.rights !== true) throw new HttpError(400, "Confirm that you own the image or have permission/a license allowing its use");
+  const raw = String(data.platforms ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   if (!raw.length) throw new HttpError(400, "Select at least one platform");
   const platforms = [...new Set(raw)] as Platform[];
   for (const platform of platforms) if (!PLATFORMS.includes(platform)) throw new HttpError(400, `Unknown platform: ${platform}`);
-  const layout = String(form.get("layout") ?? "blur") as Layout;
+  const layout = String(data.layout ?? "blur") as Layout;
   if (!LAYOUTS.includes(layout)) throw new HttpError(400, `Unknown layout: ${layout}`);
-  const credits = String(form.get("credits") ?? "").trim();
+  const credits = String(data.credits ?? "").trim();
   if (credits.length > 2000) throw new HttpError(400, "Attribution text must be 2,000 characters or fewer");
-  return { art: bytes, presets: presetsFor(platforms), layout, credits };
+  return { presets: presetsFor(platforms), layout, credits };
+}
+function validPath(path: unknown): path is string { return typeof path === "string" && UUID_PATH.test(path); }
+async function jsonObject(req: Request, message: string): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try { body = await req.json(); } catch { throw new HttpError(400, message); }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) throw new HttpError(400, message);
+  return body as Record<string, unknown>;
+}
+function metadataFromBody(body: Record<string, unknown>) {
+  if (!validPath(body.pathname)) throw new HttpError(400, "Invalid temporary image path");
+  return { path: body.pathname, ...fields(body) };
+}
+async function readObject(path: string): Promise<{ art: Buffer; etag?: string }> {
+  const object = await get(path, { access: "private" });
+  if (!object) throw new HttpError(400, "Temporary image not found or expired");
+  const { stream, blob } = object;
+  if (!stream || blob.size > MAX_IMAGE_BYTES) throw new HttpError(413, "Image exceeds the 10 MiB upload limit");
+  try {
+    const reader = stream.getReader(); const chunks: Uint8Array[] = []; let size = 0;
+    while (true) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > MAX_IMAGE_BYTES) throw new HttpError(413, "Image exceeds the 10 MiB upload limit"); chunks.push(value); }
+    return { art: Buffer.concat(chunks), etag: blob.etag };
+  } finally { /* consumer owns cleanup via del in endpoint finally */ }
+}
+async function metadata(req: Request) { return metadataFromBody(await jsonObject(req, "Expected JSON metadata")); }
+export async function handleUploadUrl(req: Request): Promise<Response> {
+  return guarded(async () => {
+    const body = await jsonObject(req, "Expected JSON upload metadata");
+    if (body.rights !== true) throw new HttpError(400, "Confirm that you own the image or have permission/a license allowing its use");
+    fields(body);
+    const type = String(body.contentType ?? "");
+    if (!MIME_TYPES.includes(type)) throw new HttpError(415, "Upload a PNG, JPEG, or WebP image");
+    const extension = type === "image/jpeg" ? "jpg" : type.slice(6);
+    const pathname = `${TEMP_PREFIX}${randomUUID()}.${extension}`;
+    const validUntil = Date.now() + 5 * 60 * 1000;
+    const token = await issueSignedToken({ pathname, operations: ["put"], validUntil, allowedContentTypes: MIME_TYPES, maximumSizeInBytes: MAX_IMAGE_BYTES });
+    const result = await presignUrl(token, { operation: "put", pathname, access: "private", validUntil, allowedContentTypes: MIME_TYPES, maximumSizeInBytes: MAX_IMAGE_BYTES, allowOverwrite: false, addRandomSuffix: false });
+    return json({ pathname, url: result.presignedUrl, validUntil });
+  });
 }
 export function handlePreview(req: Request): Promise<Response> {
   return guarded(async () => {
-    const { art, presets, layout } = await readForm(req);
-    const previews = [];
-    for (const preset of presets) {
-      const width = Math.max(1, Math.round(preset.width * PREVIEW_SCALE));
-      const height = Math.max(1, Math.round(preset.height * PREVIEW_SCALE));
-      const data = await renderWallpaper(art, { width, height }, { layout });
-      previews.push({ id: preset.id, platform: preset.platform, label: preset.label, data: `data:image/png;base64,${data.toString("base64")}` });
-    }
-    return json({ previews });
+    const { path, presets, layout } = await metadata(req);
+    let etag: string | undefined;
+    try {
+      const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
+      const previews = [];
+      for (const preset of presets) { const width = Math.max(1, Math.round(preset.width * PREVIEW_SCALE)); const height = Math.max(1, Math.round(preset.height * PREVIEW_SCALE)); const data = await renderWallpaper(art, { width, height }, { layout }); previews.push({ id: preset.id, platform: preset.platform, label: preset.label, data: `data:image/png;base64,${data.toString("base64")}` }); }
+      return json({ previews });
+    } finally { await del(path, etag ? { ifMatch: etag } : undefined); }
+  });
+}
+export function handleFullPreview(req: Request): Promise<Response> {
+  return guarded(async () => {
+    const body = await jsonObject(req, "Expected JSON metadata");
+    if (!validPath(body.pathname)) throw new HttpError(400, "Invalid temporary image path");
+    const path = body.pathname;
+    let etag: string | undefined;
+    try {
+      const { presets, layout } = fields(body);
+      const presetId = typeof body.presetId === "string" ? body.presetId : "";
+      const preset = presets.find((item) => item.id === presetId);
+      if (!preset) throw new HttpError(400, "Requested preset is not included in the selected platforms");
+      const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
+      const data = await renderWallpaper(art, { width: preset.width, height: preset.height }, { layout });
+      const stream = new ReadableStream<Uint8Array>({ start(controller) { const chunkSize = 64 * 1024; for (let offset = 0; offset < data.length; offset += chunkSize) controller.enqueue(new Uint8Array(data.subarray(offset, Math.min(offset + chunkSize, data.length)))); controller.close(); } });
+      return new Response(stream, { headers: { "content-type": "image/png", "content-disposition": `inline; filename="${preset.id}.png"`, "cache-control": "no-store" } });
+    } finally { await del(path, etag ? { ifMatch: etag } : undefined); }
   });
 }
 export function handleZip(req: Request): Promise<Response> {
   return guarded(async () => {
-    const { art, presets, layout, credits } = await readForm(req);
-    const zip = await buildZip(art, presets, { layout }, credits || undefined);
-    return new Response(new Uint8Array(zip), { headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="albumwall.zip"', "cache-control": "no-store" } });
+    const { path, presets, layout, credits } = await metadata(req);
+    let etag: string | undefined;
+    try {
+      const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
+      const zip = await buildZip(art, presets, { layout }, credits || undefined);
+      const stream = new ReadableStream<Uint8Array>({ start(controller) { const chunkSize = 64 * 1024; for (let offset = 0; offset < zip.length; offset += chunkSize) controller.enqueue(new Uint8Array(zip.subarray(offset, Math.min(offset + chunkSize, zip.length)))); controller.close(); } });
+      return new Response(stream, { headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="albumwall.zip"', "cache-control": "no-store" } });
+    } finally { await del(path, etag ? { ifMatch: etag } : undefined); }
+  });
+}
+function equalSecret(a: string, b: string) { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); }
+export async function handleTempCleanup(req: Request): Promise<Response> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !equalSecret(req.headers.get("authorization") ?? "", `Bearer ${secret}`)) return json({ error: "Unauthorized" }, 401);
+  return guarded(async () => {
+    const cutoff = Date.now() - 60 * 60 * 1000; let cursor: string | undefined; let deleted = 0;
+    do {
+      const page = await list({ prefix: TEMP_PREFIX, limit: 1000, ...(cursor ? { cursor } : {}) });
+      for (const blob of page.blobs) if (blob.pathname.startsWith(TEMP_PREFIX) && blob.uploadedAt.getTime() < cutoff) { await del(blob.pathname, { ifMatch: blob.etag }); deleted++; }
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+    return json({ deleted });
   });
 }

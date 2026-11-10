@@ -10,5 +10,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/preview", "/api/zip"],
+  matcher: ["/api/upload-url", "/api/preview", "/api/full-preview", "/api/zip"],
 };
