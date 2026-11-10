@@ -987,16 +987,16 @@ Do before making the repo or site public.
 
 | Check | Action |
 |---|---|
-| Spotify Developer Terms and Design Guidelines on album art | Read them; adjust or add notices if they restrict altering art. Not verified in this plan |
-| Public hosting abuse | Implemented: root Next.js `proxy.ts` applies shared Upstash Redis sliding-window limits to `/api/info` (20/min), `/api/wallpaper` (30/min), and `/api/zip` (3/min), with HMAC client keys and fail-closed behavior. Before public sharing, configure `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and `ALBUMWALL_RATE_LIMIT_HASH_SECRET`; configure the trusted reverse proxy to overwrite/sanitize `x-real-ip` or `x-forwarded-for`; then verify live Redis and proxy behavior. Not deployment-verified; do not claim public readiness yet. |
-| Compute cost | Zip rendering is CPU/memory heavy on a free tier; keep per-platform downloads |
-| Unofficial 640px URL | Confirm in the live check (Task 7 Step 2); note result in README |
+| Spotify artwork policy | Superseded as the application's source: the current website and CLI do not fetch Spotify artwork. Users supply files and attest that they have permission; optional credits are included in ZIPs. This does not verify user rights or provide legal clearance. See [Spotify Developer Terms](https://developer.spotify.com/terms) and [Design & Branding Guidelines](https://developer.spotify.com/documentation/design); do not imply that arbitrary Spotify-derived uploads are authorized. |
+| Public hosting abuse | Implemented: root Next.js `proxy.ts` applies shared Upstash Redis sliding-window limits to `POST /api/preview` (10/min) and `POST /api/zip` (3/min), with HMAC client keys and fail-closed behavior. Before public sharing, configure Upstash credentials and `ALBUMWALL_RATE_LIMIT_HASH_SECRET`, configure trusted proxy IP-header sanitization and the 11 MiB request-body cap, then verify live Redis/proxy behavior. Not deployment-verified; do not claim public readiness yet. |
+| Compute cost | Platform selection starts empty; uploads are capped at 10 MiB and 40 million pixels, and requests render only selected presets. All platforms can still be selected together; no host benchmark, per-request preset/output cap, or concurrency cap has been verified. |
+| Unofficial 640px URL | Superseded: the app no longer fetches Spotify image URLs. Output resolution depends on the user-supplied image; the historical Task 7 640×640 result is not representative of current source behavior. |
 
 ---
 
 ## Self-review
 
-Plan deviation (user-requested CLI tests): baseline was 28 tests across 7 files, rather than the original 25/6. Task 9 adds 4 rate-limit tests in `tests/rate-limit.test.ts`, bringing the verified total to 32 tests across 8 files. `npm run typecheck`, `npm test`, and `npm run build` passed; build reports `ƒ Proxy (Middleware)` and the three dynamic API routes. Docker and GitHub execution were not verified.
+Plan deviations: user-requested CLI tests were added earlier; a later product redesign removed Spotify URL fetching and switched the website and CLI to user-provided files. Current verification is 22 tests across 7 files; `npm run typecheck`, `npm test`, and `npm run build` passed. In-process multipart smoke checks returned three selected iOS previews and a 216,576-byte ZIP. No live Redis/reverse-proxy/deployment test was performed.
 
 | Check | Result |
 |---|---|
@@ -1004,8 +1004,8 @@ Plan deviation (user-requested CLI tests): baseline was 28 tests across 7 files,
 | PWA on phone | Manifest and icons (Task 6); phone install not verified (Task 7 Step 4 NOT RUN). No service worker or offline mode: the app needs the server, so offline adds nothing |
 | Open-source ready | Task 8 |
 | Placeholders | None |
-| Verified here | Tasks 1–9 files: 32 tests passed across 8 files, including 4 injected-backend rate-limit tests; `npm run typecheck`, `npm test`, and `npm run build` pass. Next.js 16.4.6 build emits `/`, `/api/info`, `/api/wallpaper`, `/api/zip`, `/manifest.webmanifest`, and recognizes root Proxy. Live Spotify check verified; Task 7 offline routes/statuses passed (with standalone-mode warning). |
-| Not verified here | Phone install (Task 7 Step 4 NOT RUN: deployment/tunneling prohibited and no phone available), Docker build (NOT RUN: Docker CLI is not installed), GitHub Actions execution (not run; no push/deploy), production environment secrets, trusted-proxy sanitization, and live Upstash Redis behavior |
+| Verified here | Current tree: 22 tests passed across 7 files; `npm run typecheck`, `npm test`, and `npm run build` pass. Build emits `/`, `POST /api/preview`, `POST /api/zip`, `/manifest.webmanifest`, and recognizes root Proxy. In-process multipart smoke checks passed; source audit found no Spotify API/artwork fetch code in app or CLI. |
+| Not verified here | User image ownership/license scope; production secrets, trusted-proxy IP sanitization, request-body cap and live Upstash behavior; host-specific CPU/memory/time/concurrency benchmarks; phone install (Task 7 Step 4 NOT RUN), Docker build (CLI unavailable), and GitHub Actions execution (no push/deploy) |
 | Type consistency | Names match across tasks; code was compiled |
 
 ## Later product redesign (2026-11-10)

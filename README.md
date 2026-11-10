@@ -1,6 +1,8 @@
 # Albumwall
 Create device wallpapers for Android, iOS, macOS, Windows and Linux from an image you own or are licensed to use.
 
+Albumwall does not connect to Spotify or fetch artwork from an external catalog.
+
 ## Use
     npm install
     npm run dev          # website on http://localhost:3000
@@ -21,7 +23,7 @@ Production must run on a Node.js host with the root Next.js `proxy.ts` enabled. 
 - Animated and multipage images are not supported.
 
 ## Disclaimer
-Not affiliated with or endorsed by Spotify. Users are responsible for image rights and any required attribution. No assurance of personal-use rights is made.
+Albumwall does not verify ownership, license scope, or legal permission. Users are responsible for using images they own or are authorized to use, and for including any required attribution.
 
 ## Development
     npm test
