@@ -14,16 +14,16 @@ async function pixel(buf: Buffer, left: number, top: number) {
 }
 
 describe("renderWallpaper", () => {
-  it("fits artwork proportionally inside target bounds and retains edge content without a background", async () => {
+  it("resizes to exact target bounds, retains edge content, and adds no background", async () => {
     const art = await sharp({ create: { width: 100, height: 50, channels: 3, background: "#0000ff" } })
       .composite([{ input: { create: { width: 5, height: 50, channels: 3, background: "#ff0000" } }, left: 0, top: 0 }])
       .png()
       .toBuffer();
     const out = await renderWallpaper(art, { width: 200, height: 200 });
     const meta = await sharp(out).metadata();
-    expect(meta).toMatchObject({ width: 200, height: 100, format: "png" });
-    expect(await pixel(out, 0, 50)).toEqual({ r: 255, g: 0, b: 0 });
-    expect(await pixel(out, 199, 50)).toEqual({ r: 0, g: 0, b: 255 });
+    expect(meta).toMatchObject({ width: 200, height: 200, format: "png" });
+    expect(await pixel(out, 0, 100)).toEqual({ r: 255, g: 0, b: 0 });
+    expect(await pixel(out, 199, 100)).toEqual({ r: 0, g: 0, b: 255 });
   });
 
   it("upscales small artwork proportionally within the requested bounds", async () => {
@@ -39,6 +39,6 @@ describe("renderWallpaper", () => {
     ["webp", "webp"],
   ] as const)("encodes valid %s output", async (format, expectedFormat) => {
     const out = await renderWallpaper(await redArt(80, 40), { width: 160, height: 160 }, format);
-    expect(await sharp(out).metadata()).toMatchObject({ width: 160, height: 80, format: expectedFormat });
+    expect(await sharp(out).metadata()).toMatchObject({ width: 160, height: 160, format: expectedFormat });
   });
 });

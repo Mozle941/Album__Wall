@@ -20,6 +20,6 @@ describe("generateAll", () => {
     expect(await readdir(path.join(out, "ios"))).toContain("ios-iphone-13.png");
     expect(await readdir(path.join(out, "linux"))).toContain("linux-4k.png");
     const meta = await sharp(path.join(out, "linux", "linux-4k.png")).metadata();
-    expect([meta.width, meta.height]).toEqual([2160, 2160]);
+    expect([meta.width, meta.height]).toEqual([3840, 2160]);
   }, 30_000);
 });

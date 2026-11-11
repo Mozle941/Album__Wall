@@ -37,7 +37,7 @@ describe("private Blob upload and processing", () => {
   it("renders one allowed preset at native dimensions, streams PNG, and deletes source", async () => {
     await mockBlob(); const res = await handleFullPreview(body(path, { presetId: "ios-iphone-13" }));
     expect(res.status).toBe(200); expect(res.headers.get("content-type")).toBe("image/png"); expect(res.body).toBeTruthy();
-    expect(await sharp(Buffer.from(await res.arrayBuffer())).metadata()).toMatchObject({ width: 1170, height: 1170, format: "png" });
+    expect(await sharp(Buffer.from(await res.arrayBuffer())).metadata()).toMatchObject({ width: 1170, height: 2532, format: "png" });
     expect(blob.get).toHaveBeenCalledWith(path, { access: "private" }); expect(blob.del).toHaveBeenCalledWith(path, { ifMatch: '"etag"' });
   });
   it("uses a selected aspect ratio for preview and full-resolution output", async () => {
@@ -48,7 +48,7 @@ describe("private Blob upload and processing", () => {
     await mockBlob();
     const fullResponse = await handleFullPreview(body(path, { presetId: "ios-iphone-13", aspectRatio: "9:16" }));
     expect(fullResponse.status).toBe(200);
-    expect(await sharp(Buffer.from(await fullResponse.arrayBuffer())).metadata()).toMatchObject({ width: 1424, height: 1424, format: "png" });
+    expect(await sharp(Buffer.from(await fullResponse.arrayBuffer())).metadata()).toMatchObject({ width: 1424, height: 2532, format: "png" });
   });
   it("rejects malformed JSON values without treating them as metadata objects", async () => {
     for (const value of ["null", "[]", "false", "42", "\"text\"", "{"]) {
@@ -75,7 +75,7 @@ describe("private Blob upload and processing", () => {
     const response = await handleZip(body(path, { aspectRatio: "9:16" }));
     expect(response.status).toBe(200);
     const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
-    expect(await sharp(Buffer.from(files["ios/ios-iphone-13.png"])).metadata()).toMatchObject({ width: 1424, height: 1424 });
+    expect(await sharp(Buffer.from(files["ios/ios-iphone-13.png"])).metadata()).toMatchObject({ width: 1424, height: 2532 });
   });
   it("supports selected JPEG format in a batch ZIP", async () => {
     await mockBlob();
@@ -83,7 +83,7 @@ describe("private Blob upload and processing", () => {
     expect(response.status).toBe(200);
     const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
     const output = Buffer.from(files["ios/ios-iphone-13.jpg"]);
-    expect(await sharp(output).metadata()).toMatchObject({ format: "jpeg", width: 1170, height: 1170 });
+    expect(await sharp(output).metadata()).toMatchObject({ format: "jpeg", width: 1170, height: 2532 });
   });
   it("authenticates cleanup and deletes only stale temp objects with conditional ETags", async () => {
     process.env.CRON_SECRET = "a-long-cron-secret";

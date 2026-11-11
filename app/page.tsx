@@ -785,7 +785,7 @@ export default function Home() {
                       ))}
                     </select>
                   </label>
-                  <p className="ratio-note">The whole image is proportionally resized with no crop or added background. If its shape differs from the selected ratio, the exported dimensions stay within the selected size and retain the artwork’s original shape.</p>
+                  <p className="ratio-note">Output uses the exact selected dimensions, with no crop or added background. If the source has a different shape, it is stretched to match the selected aspect ratio.</p>
                   <label className="field">
                     <span>Batch download image format</span>
                     <select
@@ -844,7 +844,7 @@ export default function Home() {
                           <img src={preview.data} alt={preview.label} />
                           <span className="inspect-badge">Inspect ↗</span>
                         </button>
-                        <figcaption>{preview.imageName} · {preview.label} · up to {preview.width} × {preview.height} px</figcaption>
+                        <figcaption>{preview.imageName} · {preview.label} · {preview.width} × {preview.height} px</figcaption>
                       </figure>
                   ))}
                 </div>

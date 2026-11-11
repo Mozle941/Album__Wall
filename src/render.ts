@@ -8,11 +8,11 @@ export interface Size {
   height: number;
 }
 
-/** Resize proportionally within the requested bounds; preserve the whole image without adding a background. */
+/** Resize to the exact requested dimensions; retain all source content without cropping or adding a background. */
 export async function renderWallpaper(art: Buffer, target: Size, format: OutputFormat = "png"): Promise<Buffer> {
   const image = sharp(art)
     .resize(target.width, target.height, {
-      fit: "inside",
+      fit: "fill",
       kernel: "lanczos3",
     });
   switch (format) {
