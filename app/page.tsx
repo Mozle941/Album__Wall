@@ -785,7 +785,7 @@ export default function Home() {
                       ))}
                     </select>
                   </label>
-                  <p className="ratio-note">Output uses the exact selected dimensions, with no crop or added background. If the source has a different shape, it is stretched to match the selected aspect ratio.</p>
+                  <p className="ratio-note">The full image keeps its original proportions inside the exact selected canvas, without cropping or stretching. PNG/WebP use transparent padding when needed; JPEG extends edge pixels to fill the canvas.</p>
                   <label className="field">
                     <span>Batch download image format</span>
                     <select
