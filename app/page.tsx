@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ASPECT_RATIOS, PLATFORMS, PRESETS, type AspectRatio, type Platform } from "../src/presets";
+import { OUTPUT_FORMATS, type OutputFormat } from "../src/output-format";
 
 type Artwork = { id: string; file: File; url: string };
 type Preview = { id: string; presetId: string; imageId: string; imageName: string; originalUrl: string; platform: Platform; label: string; width: number; height: number; data: string };
@@ -131,6 +132,7 @@ export default function Home() {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("device");
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("png");
   const [rights, setRights] = useState(false);
   const [credits, setCredits] = useState("");
   const [previews, setPreviews] = useState<Preview[]>([]);
@@ -265,7 +267,7 @@ export default function Home() {
   }
 
   function metadata(pathname: string) {
-    return { pathname, platforms: platforms.join(","), aspectRatio, rights, credits };
+    return { pathname, platforms: platforms.join(","), aspectRatio, outputFormat, rights, credits };
   }
 
   function chooseArtwork(fileList: FileList | File[] | null) {
@@ -766,7 +768,7 @@ export default function Home() {
                 <span>I own this image or have permission/a license that permits its use, and I will provide attribution when required.</span>
               </label>
               <details className="options-panel">
-                <summary>Options: aspect ratio and attribution</summary>
+                <summary>Options: aspect ratio, output format, and attribution</summary>
                 <div className="options-content">
                   <label className="field">
                     <span>Wallpaper aspect ratio</span>
@@ -783,7 +785,22 @@ export default function Home() {
                       ))}
                     </select>
                   </label>
-                  <p className="ratio-note">Artwork fills the selected size. Edges may be cropped to match the chosen ratio.</p>
+                  <p className="ratio-note">The whole image is proportionally resized with no crop or added background. If its shape differs from the selected ratio, the exported dimensions stay within the selected size and retain the artwork’s original shape.</p>
+                  <label className="field">
+                    <span>Batch download image format</span>
+                    <select
+                      value={outputFormat}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setOutputFormat(event.target.value as OutputFormat);
+                        invalidate();
+                      }}
+                    >
+                      {OUTPUT_FORMATS.map((format) => (
+                        <option value={format} key={format}>{format === "jpeg" ? "JPEG" : format.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="field">
                     <span>Optional attribution / credit</span>
                     <input
@@ -827,7 +844,7 @@ export default function Home() {
                           <img src={preview.data} alt={preview.label} />
                           <span className="inspect-badge">Inspect ↗</span>
                         </button>
-                        <figcaption>{preview.imageName} · {preview.label} · {preview.width} × {preview.height} px</figcaption>
+                        <figcaption>{preview.imageName} · {preview.label} · up to {preview.width} × {preview.height} px</figcaption>
                       </figure>
                   ))}
                 </div>

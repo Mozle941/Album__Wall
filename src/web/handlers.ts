@@ -3,6 +3,7 @@ import { del, get, issueSignedToken, list, presignUrl } from "@vercel/blob";
 import { buildZip } from "../bundle";
 import { validateImage, ImageInputError, MAX_IMAGE_BYTES } from "../image-input";
 import { ASPECT_RATIOS, dimensionsForRatio, PLATFORMS, presetsFor, type AspectRatio, type Platform } from "../presets";
+import { OUTPUT_FORMATS, type OutputFormat } from "../output-format";
 import { renderWallpaper } from "../render";
 const PREVIEW_SCALE = 0.15;
 export const TEMP_PREFIX = "albumwall-temp/";
@@ -24,9 +25,11 @@ function fields(data: Record<string, unknown>) {
   for (const platform of platforms) if (!PLATFORMS.includes(platform)) throw new HttpError(400, `Unknown platform: ${platform}`);
   const aspectRatio = String(data.aspectRatio ?? "device") as AspectRatio;
   if (!ASPECT_RATIOS.includes(aspectRatio)) throw new HttpError(400, `Unknown aspect ratio: ${aspectRatio}`);
+  const outputFormat = String(data.outputFormat ?? "png") as OutputFormat;
+  if (!OUTPUT_FORMATS.includes(outputFormat)) throw new HttpError(400, `Unknown output format: ${outputFormat}`);
   const credits = String(data.credits ?? "").trim();
   if (credits.length > 2000) throw new HttpError(400, "Attribution text must be 2,000 characters or fewer");
-  return { presets: presetsFor(platforms), aspectRatio, credits };
+  return { presets: presetsFor(platforms), aspectRatio, outputFormat, credits };
 }
 function validPath(path: unknown): path is string { return typeof path === "string" && UUID_PATH.test(path); }
 async function jsonObject(req: Request, message: string): Promise<Record<string, unknown>> {
@@ -99,12 +102,12 @@ export function handleFullPreview(req: Request): Promise<Response> {
 }
 export function handleZip(req: Request): Promise<Response> {
   return guarded(async () => {
-    const { path, presets, aspectRatio, credits } = await metadata(req);
+    const { path, presets, aspectRatio, credits, outputFormat } = await metadata(req);
     let etag: string | undefined;
     try {
       const object = await readObject(path); etag = object.etag; const { art } = object; await validateImage(art);
       const ratioPresets = presets.map((preset) => ({ ...preset, ...dimensionsForRatio(preset.width, preset.height, aspectRatio) }));
-      const zip = await buildZip(art, ratioPresets, credits || undefined);
+      const zip = await buildZip(art, ratioPresets, credits || undefined, outputFormat);
       const stream = new ReadableStream<Uint8Array>({ start(controller) { const chunkSize = 64 * 1024; for (let offset = 0; offset < zip.length; offset += chunkSize) controller.enqueue(new Uint8Array(zip.subarray(offset, Math.min(offset + chunkSize, zip.length)))); controller.close(); } });
       return new Response(stream, { headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="albumwall.zip"', "cache-control": "no-store" } });
     } finally { await del(path, etag ? { ifMatch: etag } : undefined); }

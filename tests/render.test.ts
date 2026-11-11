@@ -14,27 +14,31 @@ async function pixel(buf: Buffer, left: number, top: number) {
 }
 
 describe("renderWallpaper", () => {
-  it("directly fills portrait and landscape target dimensions without adding a background", async () => {
-    for (const target of [
-      { width: 1080, height: 2400 },
-      { width: 1920, height: 1080 },
-    ]) {
-      const out = await renderWallpaper(await redArt(), target);
-      const meta = await sharp(out).metadata();
-      expect(meta.width).toBe(target.width);
-      expect(meta.height).toBe(target.height);
-      expect(meta.format).toBe("png");
-      const corner = await pixel(out, 0, 0);
-      const centre = await pixel(out, Math.floor(target.width / 2), Math.floor(target.height / 2));
-      expect(corner).toEqual({ r: 255, g: 0, b: 0 });
-      expect(centre).toEqual({ r: 255, g: 0, b: 0 });
-    }
+  it("fits artwork proportionally inside target bounds and retains edge content without a background", async () => {
+    const art = await sharp({ create: { width: 100, height: 50, channels: 3, background: "#0000ff" } })
+      .composite([{ input: { create: { width: 5, height: 50, channels: 3, background: "#ff0000" } }, left: 0, top: 0 }])
+      .png()
+      .toBuffer();
+    const out = await renderWallpaper(art, { width: 200, height: 200 });
+    const meta = await sharp(out).metadata();
+    expect(meta).toMatchObject({ width: 200, height: 100, format: "png" });
+    expect(await pixel(out, 0, 50)).toEqual({ r: 255, g: 0, b: 0 });
+    expect(await pixel(out, 199, 50)).toEqual({ r: 0, g: 0, b: 255 });
   });
 
-  it("upscales small artwork to the requested size", async () => {
+  it("upscales small artwork proportionally within the requested bounds", async () => {
     const out = await renderWallpaper(await redArt(8, 12), { width: 320, height: 480 });
     const meta = await sharp(out).metadata();
     expect(meta).toMatchObject({ width: 320, height: 480, format: "png" });
     expect(await pixel(out, 0, 0)).toEqual({ r: 255, g: 0, b: 0 });
+  });
+
+  it.each([
+    ["jpeg", "jpeg"],
+    ["png", "png"],
+    ["webp", "webp"],
+  ] as const)("encodes valid %s output", async (format, expectedFormat) => {
+    const out = await renderWallpaper(await redArt(80, 40), { width: 160, height: 160 }, format);
+    expect(await sharp(out).metadata()).toMatchObject({ width: 160, height: 80, format: expectedFormat });
   });
 });

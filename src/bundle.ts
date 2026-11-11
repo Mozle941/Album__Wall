@@ -1,16 +1,19 @@
 import { zipSync } from "fflate";
-import { renderAll } from "./generate";
 import type { Preset } from "./presets";
+import { renderWallpaper, type OutputFormat } from "./render";
 
-/** level 0: PNGs are already compressed, so storing is faster and no larger. */
+/** level 0: image payloads are already compressed, so storing is faster and no larger. */
 export async function buildZip(
   art: Buffer,
   presets: Preset[],
   credits?: string,
+  format: OutputFormat = "png",
 ): Promise<Uint8Array> {
   const files: Record<string, Uint8Array> = {};
-  for (const f of await renderAll(art, presets)) {
-    files[`${f.platform}/${f.id}.png`] = new Uint8Array(f.data);
+  const extension = format === "jpeg" ? "jpg" : format;
+  for (const preset of presets) {
+    const data = await renderWallpaper(art, preset, format);
+    files[`${preset.platform}/${preset.id}.${extension}`] = new Uint8Array(data);
   }
   if (credits) files["CREDITS.txt"] = new TextEncoder().encode(`${credits}\n`);
   return zipSync(files, { level: 0 });
